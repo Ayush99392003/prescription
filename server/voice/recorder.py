@@ -131,7 +131,14 @@ def _save_wav(
     sample_rate: int,
     channels: int,
 ) -> None:
-    """Write numpy int16 audio array to a WAV file."""
+    """Write numpy int16 audio array to a WAV file with peak normalization."""
+    # Peak normalization to improve volume clarity for STT
+    max_val = np.max(np.abs(data)) if data.size > 0 else 0
+    if max_val > 0:
+        target_peak = 29490  # ~90% of max int16 (32767)
+        scaling_factor = target_peak / max_val
+        data = np.clip(data * scaling_factor, -32768, 32767).astype(np.int16)
+
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with wave.open(path, "wb") as wf:
         wf.setnchannels(channels)

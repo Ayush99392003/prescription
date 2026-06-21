@@ -29,7 +29,8 @@ console = Console()
 # ── Provider factory functions ────────────────────────────────────────
 
 def _get_stt_provider():
-    """Instantiate the configured STT provider.
+    """
+    Instantiate the configured STT provider.
 
     Returns:
         An STTProvider instance based on config.STT_PROVIDER.
@@ -48,14 +49,14 @@ def _get_stt_provider():
             OpenAIWhisperSTT,
         )
         return OpenAIWhisperSTT()
-    if name == "groq":
+    if name == "groq_whisper":
         from server.voice.groq_whisper_stt import (  # noqa: PLC0415
             GroqWhisperSTT,
         )
         return GroqWhisperSTT()
     raise ValueError(
         f"Unknown STT_PROVIDER: '{name}'. "
-        "Options: 'faster_whisper', 'openai_whisper', 'groq'"
+        "Options: 'faster_whisper', 'openai_whisper', 'groq_whisper'"
     )
 
 

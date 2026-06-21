@@ -86,6 +86,9 @@ def _get_stt():
     if name == "openai_whisper":
         from server.voice.openai_whisper_stt import OpenAIWhisperSTT  # noqa: PLC0415
         return OpenAIWhisperSTT()
+    if name == "groq_whisper":
+        from server.voice.groq_whisper_stt import GroqWhisperSTT  # noqa: PLC0415
+        return GroqWhisperSTT()
     raise HTTPException(
         status_code=500,
         detail=f"Unknown STT_PROVIDER: '{name}'",

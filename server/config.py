@@ -22,15 +22,18 @@ OUTPUT_DIR = ROOT_DIR / "server" / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── STT Plugin ───────────────────────────────────────────────────────
-# Options: "faster_whisper" | "openai_whisper"
-STT_PROVIDER: str = "faster_whisper"
+# Options: "faster_whisper" | "openai_whisper" | "groq_whisper"
+STT_PROVIDER: str = os.getenv("STT_PROVIDER", "faster_whisper")
 
 # tiny | base | small | medium | large
-WHISPER_MODEL: str = "base"
+WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "base")
+
+# Options: "general" | "pediatrics" | "dermatology" | "cardiology"
+CLINIC_SPECIALTY: str = os.getenv("CLINIC_SPECIALTY", "general")
 
 # ── LLM Plugin ───────────────────────────────────────────────────────
 # Options: "ollama" | "groq"
-LLM_PROVIDER: str = "ollama"
+LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "ollama")
 
 OLLAMA_MODEL: str = "llama3.2:3b"
 OLLAMA_BASE_URL: str = "http://localhost:11434"

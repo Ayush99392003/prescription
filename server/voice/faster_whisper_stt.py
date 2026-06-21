@@ -73,6 +73,9 @@ class FasterWhisperSTT(STTProvider):
 
         model = _get_model()
 
+        from server.voice.prompts import get_initial_prompt  # noqa: PLC0415
+        prompt_str = get_initial_prompt(config.CLINIC_SPECIALTY)
+
         with console.status(
             "[cyan]Transcribing audio…[/cyan]"
         ):
@@ -81,6 +84,7 @@ class FasterWhisperSTT(STTProvider):
                     audio_path,
                     beam_size=5,
                     language="en",
+                    initial_prompt=prompt_str,
                 )
                 text_parts = [seg.text for seg in segments]
             except Exception as exc:

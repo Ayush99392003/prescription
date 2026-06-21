@@ -69,6 +69,9 @@ class OpenAIWhisperSTT(STTProvider):
 
         model = _get_model()
 
+        from server.voice.prompts import get_initial_prompt  # noqa: PLC0415
+        prompt_str = get_initial_prompt(config.CLINIC_SPECIALTY)
+
         with console.status(
             "[cyan]Transcribing (OpenAI Whisper)…[/cyan]"
         ):
@@ -77,6 +80,7 @@ class OpenAIWhisperSTT(STTProvider):
                     audio_path,
                     language="en",
                     fp16=False,
+                    initial_prompt=prompt_str,
                 )
             except Exception as exc:
                 raise RuntimeError(

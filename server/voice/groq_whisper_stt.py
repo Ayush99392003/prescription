@@ -1,11 +1,8 @@
-"""STT provider using the Groq Cloud API (Whisper-large-v3 model).
-
-Extremely fast, cloud-based alternative to local models.
+"""STT provider using Groq cloud API via OpenAI transcriptions endpoint.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from openai import OpenAI
 from rich.console import Console
 
@@ -14,21 +11,19 @@ from server.voice.base import STTProvider
 
 console = Console()
 
-_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-
 
 class GroqWhisperSTT(STTProvider):
-    """Transcribes audio using Whisper-large-v3 on Groq's cloud API.
+    """Transcribes audio using Groq's high-speed Whisper cloud API.
 
-    Requires internet and a valid GROQ_API_KEY env var.
+    Requires a valid GROQ_API_KEY env var and internet access.
     """
 
     def is_available(self) -> bool:
-        """Return True if the Groq API key is configured."""
+        """Return True if GROQ_API_KEY is configured."""
         return bool(config.GROQ_API_KEY)
 
     def transcribe(self, audio_path: str) -> str:
-        """Transcribe a WAV file using Whisper via Groq cloud API.
+        """Transcribe an audio file using Groq's Whisper API.
 
         Args:
             audio_path: Path to the audio file.
@@ -37,7 +32,7 @@ class GroqWhisperSTT(STTProvider):
             Cleaned transcript string.
 
         Raises:
-            RuntimeError: If API key missing or transcription fails.
+            RuntimeError: If key missing or API call fails.
         """
         if not self.is_available():
             raise RuntimeError(
@@ -47,33 +42,31 @@ class GroqWhisperSTT(STTProvider):
 
         client = OpenAI(
             api_key=config.GROQ_API_KEY,
-            base_url=_GROQ_BASE_URL,
+            base_url="https://api.groq.com/openai/v1",
         )
 
-        path = Path(audio_path)
-        if not path.exists():
-            raise RuntimeError(f"Audio file not found: {audio_path}")
+        from server.voice.prompts import get_initial_prompt  # noqa: PLC0415
+        prompt_str = get_initial_prompt(config.CLINIC_SPECIALTY)
 
-        status_text = (
-            "[cyan]Transcribing audio via Groq (whisper-large-v3)…[/cyan]"
-        )
-        with console.status(status_text):
+        with console.status(
+            "[cyan]Transcribing via Groq API (whisper-large-v3)…[/cyan]"
+        ):
             try:
-                with path.open("rb") as audio_file:
-                    translation = client.audio.transcriptions.create(
+                with open(audio_path, "rb") as f:
+                    response = client.audio.transcriptions.create(
                         model="whisper-large-v3",
-                        file=audio_file,
+                        file=f,
+                        language="en",
+                        prompt=prompt_str,
                     )
-                transcript = translation.text
+                transcript = response.text.strip()
             except Exception as exc:
                 raise RuntimeError(
-                    f"Groq Whisper transcription failed: {exc}"
+                    f"Groq transcription failed: {exc}"
                 ) from exc
 
-        transcript = transcript.strip()
         transcript = _clean_fillers(transcript)
-
-        console.print("[green]✓ Transcribed via Groq[/green]")
+        console.print("[green]✓ Transcribed via Groq API[/green]")
         return transcript
 
 
