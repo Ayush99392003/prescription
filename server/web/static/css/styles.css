@@ -774,5 +774,111 @@ body::before {
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(56,139,253,0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(56,139,253,0.4); }
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 139, 253, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 139, 253, 0.4);
+}
+
+/* ── Responsive Styling (Mobile & Laptop) ────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Reduce main container and card padding on mobile */
+  .main {
+    padding: 20px 12px 60px;
+  }
+  .card {
+    padding: 20px 16px;
+  }
+  
+  /* Flex wrap header layout to fit logo/badge and tabs */
+  .header-inner {
+    height: auto;
+    min-height: 64px;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  
+  .logo {
+    order: 1;
+  }
+  
+  .session-badge {
+    order: 2;
+    max-width: 150px;
+    margin-left: auto;
+  }
+  
+  .tab-nav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 4px;
+    scrollbar-width: none; /* Hide scrollbars for Firefox */
+  }
+  
+  .tab-nav::-webkit-scrollbar {
+    display: none; /* Hide scrollbars for WebKit */
+  }
+  
+  .tab-btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Stack config items with space-between flex layout */
+  .config-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .config-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+  }
+  
+  .config-label {
+    font-size: 0.75rem;
+  }
+  
+  .config-value {
+    font-size: 0.85rem;
+    text-align: right;
+  }
+  
+  /* Stack session summary details with flex layout */
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .summary-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+  }
+  
+  .summary-value {
+    text-align: right;
+  }
+}
+
+@media (max-width: 400px) {
+  /* List patient fields vertically on very narrow screens */
+  .patient-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
