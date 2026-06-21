@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PRESCRIPTION — AI Medical Assistant</title>
+  <meta name="description" content="AI-powered voice prescription assistant for healthcare providers. Record voice, parse medications, and export professional PDFs." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <!-- ── Header ────────────────────────────────────────────────────── -->
+  <header class="header" role="banner">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚕</span>
+        <span class="logo-text">PRESCRIPTION</span>
+        <span class="logo-badge">AI</span>
+      </div>
+      <nav class="tab-nav" role="tablist" aria-label="Pipeline stages">
+        <button class="tab-btn active" data-tab="record" role="tab" aria-selected="true" id="tab-record">
+          <span class="tab-icon">🎙</span> Record
+        </button>
+        <button class="tab-btn" data-tab="pipeline" role="tab" aria-selected="false" id="tab-pipeline">
+          <span class="tab-icon">⚙</span> Pipeline
+        </button>
+        <button class="tab-btn" data-tab="prescription" role="tab" aria-selected="false" id="tab-prescription">
+          <span class="tab-icon">💊</span> Prescription
+        </button>
+        <button class="tab-btn" data-tab="export" role="tab" aria-selected="false" id="tab-export">
+          <span class="tab-icon">📄</span> Export
+        </button>
+      </nav>
+      <div class="session-badge" id="session-badge" aria-live="polite">No session</div>
+    </div>
+  </header>
+
+  <!-- ── Main Content ───────────────────────────────────────────────── -->
+  <main class="main" role="main">
+
+    <!-- Tab: Record -->
+    <section class="tab-panel active" id="panel-record" role="tabpanel" aria-labelledby="tab-record">
+      <div class="panel-hero">
+        <h1 class="hero-title">Voice Prescription Assistant</h1>
+        <p class="hero-subtitle">Record a doctor-patient session and generate a validated medical prescription in seconds.</p>
+      </div>
+
+      <div class="card-grid">
+        <!-- Record Card -->
+        <div class="card glass" id="card-recorder">
+          <div class="card-header">
+            <h2 class="card-title">🎙 Voice Capture</h2>
+          </div>
+          <div class="recorder-area">
+            <div class="record-btn-wrap">
+              <button class="record-btn" id="btn-record" aria-label="Start recording">
+                <span class="record-pulse"></span>
+                <span class="record-icon">●</span>
+              </button>
+              <p class="record-hint" id="record-hint">Click to start recording</p>
+            </div>
+            <div class="timer-display" id="timer-display" aria-live="polite">00:00</div>
+          </div>
+
+          <div class="waveform-wrap">
+            <canvas class="waveform" id="waveform" width="500" height="60" aria-hidden="true"></canvas>
+          </div>
+
+          <div class="audio-actions" id="audio-actions" style="display:none">
+            <audio class="audio-player" id="audio-player" controls aria-label="Recorded audio"></audio>
+            <button class="btn btn-primary" id="btn-run-pipeline" aria-label="Run full pipeline">
+              ⚡ Run Full Pipeline
+            </button>
+          </div>
+        </div>
+
+        <!-- Config Card -->
+        <div class="card glass" id="card-config">
+          <div class="card-header">
+            <h2 class="card-title">⚙ Configuration</h2>
+          </div>
+          <div class="config-grid">
+            <div class="config-item">
+              <span class="config-label">STT Engine</span>
+              <span class="config-value" id="cfg-stt">faster-whisper</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">LLM Engine</span>
+              <span class="config-value" id="cfg-llm">Groq</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Med Database</span>
+              <span class="config-value">30,000+ Entries</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Fuzzy Threshold</span>
+              <span class="config-value">75 / 100</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab: Pipeline -->
+    <section class="tab-panel" id="panel-pipeline" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
+      <div class="panel-hero">
+        <h1 class="hero-title">Pipeline Progress</h1>
+        <p class="hero-subtitle">Watch each stage process in real time.</p>
+      </div>
+
+      <div class="pipeline-track">
+        <div class="stage-card" id="stage-upload" data-stage="upload">
+          <div class="stage-icon">📤</div>
+          <div class="stage-body">
+            <div class="stage-name">Upload Audio</div>
+            <div class="stage-detail" id="detail-upload">Waiting...</div>
+          </div>
+          <div class="stage-status idle" id="status-upload" aria-live="polite">●</div>
+        </div>
+
+        <div class="stage-connector"></div>
+
+        <div class="stage-card" id="stage-transcribe" data-stage="transcribe">
+          <div class="stage-icon">✍</div>
+          <div class="stage-body">
+            <div class="stage-name">Transcribe</div>
+            <div class="stage-detail" id="detail-transcribe">Waiting...</div>
+          </div>
+          <div class="stage-status idle" id="status-transcribe" aria-live="polite">●</div>
+        </div>
+
+        <div class="stage-connector"></div>
+
+        <div class="stage-card" id="stage-parse" data-stage="parse">
+          <div class="stage-icon">🧠</div>
+          <div class="stage-body">
+            <div class="stage-name">LLM Parse</div>
+            <div class="stage-detail" id="detail-parse">Waiting...</div>
+          </div>
+          <div class="stage-status idle" id="status-parse" aria-live="polite">●</div>
+        </div>
+
+        <div class="stage-connector"></div>
+
+        <div class="stage-card" id="stage-validate" data-stage="validate">
+          <div class="stage-icon">🔍</div>
+          <div class="stage-body">
+            <div class="stage-name">Validate Meds</div>
+            <div class="stage-detail" id="detail-validate">Waiting...</div>
+          </div>
+          <div class="stage-status idle" id="status-validate" aria-live="polite">●</div>
+        </div>
+
+        <div class="stage-connector"></div>
+
+        <div class="stage-card" id="stage-export" data-stage="export">
+          <div class="stage-icon">📄</div>
+          <div class="stage-body">
+            <div class="stage-name">Export PDF</div>
+            <div class="stage-detail" id="detail-export">Waiting...</div>
+          </div>
+          <div class="stage-status idle" id="status-export" aria-live="polite">●</div>
+        </div>
+      </div>
+
+      <div class="transcript-panel glass" id="transcript-panel" style="display:none">
+        <h3>📝 Transcript</h3>
+        <p id="transcript-text" class="transcript-text"></p>
+      </div>
+    </section>
+
+    <!-- Tab: Prescription -->
+    <section class="tab-panel" id="panel-prescription" role="tabpanel" aria-labelledby="tab-prescription" hidden>
+      <div class="panel-hero">
+        <h1 class="hero-title">Prescription Review</h1>
+        <p class="hero-subtitle">Verify extracted data before exporting.</p>
+      </div>
+
+      <div id="rx-empty-state" class="empty-state">
+        <span class="empty-icon">💊</span>
+        <p>No prescription data yet. Record and run the pipeline first.</p>
+      </div>
+
+      <div id="rx-content" style="display:none">
+        <!-- Patient Card -->
+        <div class="card glass patient-card">
+          <div class="card-header">
+            <h2 class="card-title">👤 Patient Information</h2>
+            <span class="diagnosis-badge" id="rx-diagnosis"></span>
+          </div>
+          <div class="patient-grid">
+            <div class="patient-field">
+              <span class="field-label">Name</span>
+              <span class="field-value" id="rx-name">—</span>
+            </div>
+            <div class="patient-field">
+              <span class="field-label">Age</span>
+              <span class="field-value" id="rx-age">—</span>
+            </div>
+            <div class="patient-field">
+              <span class="field-label">Gender</span>
+              <span class="field-value" id="rx-gender">—</span>
+            </div>
+            <div class="patient-field">
+              <span class="field-label">Patient ID</span>
+              <span class="field-value" id="rx-pid">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Medications Table -->
+        <div class="card glass">
+          <div class="card-header">
+            <h2 class="card-title">💊 Medications</h2>
+            <span class="med-count-badge" id="med-count-badge">0 medications</span>
+          </div>
+          <div class="table-wrap">
+            <table class="med-table" id="med-table" aria-label="Medications">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Medicine</th>
+                  <th>Match Score</th>
+                  <th>Dosage</th>
+                  <th>Frequency</th>
+                  <th>Duration</th>
+                  <th>Instructions</th>
+                  <th>Price</th>
+                  <th>Manufacturer</th>
+                </tr>
+              </thead>
+              <tbody id="med-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Notes Card -->
+        <div class="card glass notes-card" id="notes-card" style="display:none">
+          <div class="card-header"><h2 class="card-title">📋 Notes</h2></div>
+          <p id="rx-notes" class="notes-text"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab: Export -->
+    <section class="tab-panel" id="panel-export" role="tabpanel" aria-labelledby="tab-export" hidden>
+      <div class="panel-hero">
+        <h1 class="hero-title">Export Prescription</h1>
+        <p class="hero-subtitle">Generate and download the professional A4 PDF prescription.</p>
+      </div>
+
+      <div class="export-grid">
+        <div class="card glass export-card">
+          <div class="export-icon-wrap">
+            <span class="export-icon-large">📄</span>
+          </div>
+          <h2 class="export-title">PDF Prescription</h2>
+          <p class="export-desc">
+            A professionally formatted A4 prescription with clinic branding,
+            patient information, validated medication table, and doctor's
+            signature line.
+          </p>
+          <div class="export-actions">
+            <button class="btn btn-primary btn-lg" id="btn-export-pdf" disabled>
+              Generate PDF
+            </button>
+            <a class="btn btn-ghost btn-lg" id="btn-download-pdf" style="display:none" aria-label="Download PDF">
+              ⬇ Download PDF
+            </a>
+          </div>
+          <div class="export-status" id="export-status"></div>
+        </div>
+
+        <div class="card glass session-summary-card">
+          <div class="card-header"><h2 class="card-title">📊 Session Summary</h2></div>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <span class="summary-label">Session ID</span>
+              <span class="summary-value mono" id="sum-sid">—</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Status</span>
+              <span class="summary-value" id="sum-status">No session</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Medications</span>
+              <span class="summary-value" id="sum-meds">—</span>
+            </div>
+            <div class="summary-item">
+              <span class="summary-label">Elapsed</span>
+              <span class="summary-value" id="sum-elapsed">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Toast Notification ─────────────────────────────────────────── -->
+  <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
