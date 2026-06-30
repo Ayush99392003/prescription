@@ -1,113 +1,232 @@
 /**
- * PRESCRIPTION Web Dashboard — app.js
- * Handles tab nav, MediaRecorder audio capture, API calls,
- * pipeline sequencing, and prescription display.
+ * PRESCRIPTION Web Dashboard — app.js  v2
+ *
+ * State-driven 4-screen flow:
+ *   Screen 1: Voice Capture  (record / upload)
+ *   Screen 2: Pipeline       (upload → transcribe → parse → validate)
+ *   Screen 3: Rx Editor      (editable table, sticky approve)
+ *   Screen 4: Export         (PDF preview, download, print)
  */
 
-/* ── State ─────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════════════════════ */
 const state = {
-  sessionId: null,
-  mediaRecorder: null,
-  audioChunks: [],
-  audioBlob: null,
-  audioUrl: null,
-  isRecording: false,
-  timerInterval: null,
-  elapsedSeconds: 0,
-  animationFrameId: null,
-  analyser: null,
+  sessionId:       null,
+  specialty:       'general',
+  mediaRecorder:   null,
+  audioChunks:     [],
+  audioBlob:       null,
+  audioUrl:        null,
+  isRecording:     false,
+  timerInterval:   null,
+  elapsedSeconds:  0,
+  animationId:     null,
+  analyser:        null,
+  // Autocomplete
+  acTargetInput:   null,
+  acDebounceTimer: null,
+  // Stage elapsed timers (per stage)
+  stageTimers:     {},
+  stageStartTimes: {},
+  // Last failed stage for retry
+  lastFailedStage: null,
+  currentScreen:   1,
+  // Parse / validate results kept for retry and back-to-edit
+  lastParseData:   null,
+  lastValidData:   null,
 };
 
-/* ── DOM refs ───────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   DOM REFS
+   ══════════════════════════════════════════════════════════════════ */
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  tabBtns:       document.querySelectorAll('.tab-btn'),
-  tabPanels:     document.querySelectorAll('.tab-panel'),
-  sessionBadge:  $('session-badge'),
-  btnRecord:     $('btn-record'),
-  recordHint:    $('record-hint'),
-  timerDisplay:  $('timer-display'),
-  waveform:      $('waveform'),
-  audioActions:  $('audio-actions'),
-  audioPlayer:   $('audio-player'),
-  btnRunPipeline:$('btn-run-pipeline'),
-  // pipeline stages
+  screens:      document.querySelectorAll('.screen'),
+  dots:         document.querySelectorAll('.dot'),
+  sessionBadge: $('session-badge'),
+
+  // Screen 1
+  inpDoctorName:   $('inp-doctor-name'),
+  selSpecialty:    $('sel-specialty'),
+  btnRecord:       $('btn-record'),
+  recordHint:      $('record-hint'),
+  timerDisplay:    $('timer-display'),
+  waveform:        $('waveform'),
+  audioActions:    $('audio-actions'),
+  audioPlayer:     $('audio-player'),
+  btnRunPipeline:  $('btn-run-pipeline'),
+  fileInput:       $('inp-file-upload'),
+  uploadAlt:       $('upload-alt'),
+
+  // Screen 2
   stages: {
-    upload:    { card: $('stage-upload'),    detail: $('detail-upload'),    status: $('status-upload') },
-    transcribe:{ card: $('stage-transcribe'),detail: $('detail-transcribe'),status: $('status-transcribe') },
-    parse:     { card: $('stage-parse'),     detail: $('detail-parse'),     status: $('status-parse') },
-    validate:  { card: $('stage-validate'),  detail: $('detail-validate'),  status: $('status-validate') },
-    export:    { card: $('stage-export'),    detail: $('detail-export'),     status: $('status-export') },
+    upload:     {
+      card:    $('stage-upload'),
+      detail:  $('detail-upload'),
+      status:  $('status-upload'),
+      elapsed: $('elapsed-upload'),
+    },
+    transcribe: {
+      card:    $('stage-transcribe'),
+      detail:  $('detail-transcribe'),
+      status:  $('status-transcribe'),
+      elapsed: $('elapsed-transcribe'),
+    },
+    parse: {
+      card:    $('stage-parse'),
+      detail:  $('detail-parse'),
+      status:  $('status-parse'),
+      elapsed: $('elapsed-parse'),
+    },
+    validate: {
+      card:    $('stage-validate'),
+      detail:  $('detail-validate'),
+      status:  $('status-validate'),
+      elapsed: $('elapsed-validate'),
+    },
   },
   transcriptPanel: $('transcript-panel'),
   transcriptText:  $('transcript-text'),
-  // prescription
-  rxEmpty:    $('rx-empty-state'),
-  rxContent:  $('rx-content'),
-  rxName:     $('rx-name'),
-  rxAge:      $('rx-age'),
-  rxGender:   $('rx-gender'),
-  rxPid:      $('rx-pid'),
-  rxDiagnosis:$('rx-diagnosis'),
-  medTbody:   $('med-tbody'),
-  medCountBadge: $('med-count-badge'),
-  rxNotes:    $('rx-notes'),
-  notesCard:  $('notes-card'),
-  // export
-  btnExportPdf:  $('btn-export-pdf'),
-  btnDownloadPdf:$('btn-download-pdf'),
-  exportStatus:  $('export-status'),
-  sumSid:        $('sum-sid'),
-  sumStatus:     $('sum-status'),
-  sumMeds:       $('sum-meds'),
-  sumElapsed:    $('sum-elapsed'),
-  toast:         $('toast'),
+  retryRow:        $('retry-row'),
+  btnRetry:        $('btn-retry'),
+
+  // Screen 3
+  rxName:           $('rx-name'),
+  rxAge:            $('rx-age'),
+  rxGender:         $('rx-gender'),
+  rxPid:            $('rx-pid'),
+  rxDiagnosis:      $('rx-diagnosis'),
+  rxComplaints:     $('rx-complaints'),
+  rxInvestigations: $('rx-investigations'),
+  rxNotes:          $('rx-notes'),
+  medTbody:         $('med-tbody'),
+  btnAddMed:        $('btn-add-med'),
+  btnApprove:       $('btn-approve'),
+  btnBackToRec:     $('btn-back-to-rec'),
+  approveBarInfo:   $('approve-bar-info'),
+
+  // Screen 4
+  btnDownloadPdf:  $('btn-download-pdf'),
+  pdfPreviewWrap:  $('pdf-preview-wrap'),
+  pdfIframe:       $('pdf-iframe'),
+  btnPrint:        $('btn-print'),
+  btnBackToEdit:   $('btn-back-to-edit'),
+  sumSid:          $('sum-sid'),
+  sumPatient:      $('sum-patient'),
+  sumMeds:         $('sum-meds'),
+  sumElapsed:      $('sum-elapsed'),
+  btnNewSession:   $('btn-new-session'),
+
+  // Toast
+  toast:     $('toast'),
+  toastIcon: $('toast-icon'),
+  toastMsg:  $('toast-msg'),
+
+  // Autocomplete
+  acDropdown: $('ac-dropdown'),
+  acList:     $('ac-list'),
 };
 
-/* ── Tab navigation ────────────────────────────────────────────── */
-function activateTab(tabName) {
-  els.tabBtns.forEach((btn) => {
-    const active = btn.dataset.tab === tabName;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-selected', active);
-  });
-  els.tabPanels.forEach((panel) => {
-    const active = panel.id === `panel-${tabName}`;
-    panel.classList.toggle('active', active);
-    panel.hidden = !active;
-  });
+/* ══════════════════════════════════════════════════════════════════
+   LOCAL-STORAGE PERSISTENCE
+   ══════════════════════════════════════════════════════════════════ */
+const LS_DOCTOR = 'rx_doctor_name';
+const LS_SPEC   = 'rx_specialty';
+
+function savePrefs() {
+  try {
+    localStorage.setItem(LS_DOCTOR, els.inpDoctorName.value.trim());
+    localStorage.setItem(LS_SPEC, els.selSpecialty.value);
+  } catch { /* storage not available */ }
 }
 
-els.tabBtns.forEach((btn) =>
-  btn.addEventListener('click', () => activateTab(btn.dataset.tab))
-);
+function loadPrefs() {
+  try {
+    const name = localStorage.getItem(LS_DOCTOR);
+    const spec = localStorage.getItem(LS_SPEC);
+    if (name) els.inpDoctorName.value = name;
+    if (spec) els.selSpecialty.value = spec;
+  } catch { /* ignore */ }
+}
 
-/* ── Toast ──────────────────────────────────────────────────────── */
-let toastTimeout;
+els.inpDoctorName.addEventListener('change', savePrefs);
+els.selSpecialty.addEventListener('change', savePrefs);
+
+/* ══════════════════════════════════════════════════════════════════
+   SCREEN NAVIGATION
+   ══════════════════════════════════════════════════════════════════ */
+function showScreen(n) {
+  state.currentScreen = n;
+  document.body.classList.toggle('screen3-active', n === 3);
+
+  els.screens.forEach((s, i) => {
+    const active = i + 1 === n;
+    s.classList.toggle('active', active);
+    s.hidden = !active;
+  });
+
+  els.dots.forEach((d) => {
+    const step = parseInt(d.dataset.step, 10);
+    d.classList.toggle('active', step === n);
+    d.classList.toggle('done', step < n);
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TOAST
+   ══════════════════════════════════════════════════════════════════ */
+const TOAST_ICONS = { success: '✓', error: '✕', info: 'ℹ' };
+let toastTimer;
+
 function showToast(message, type = 'info') {
-  clearTimeout(toastTimeout);
-  els.toast.textContent = message;
+  clearTimeout(toastTimer);
+  els.toastIcon.textContent = TOAST_ICONS[type] ?? 'ℹ';
+  els.toastMsg.textContent  = message;
   els.toast.className = `toast show ${type}`;
-  toastTimeout = setTimeout(() => {
-    els.toast.classList.remove('show');
-  }, 3800);
+  toastTimer = setTimeout(
+    () => els.toast.classList.remove('show'),
+    4000,
+  );
 }
 
-/* ── API helpers ────────────────────────────────────────────────── */
-const API = '/api/session';
+/* ══════════════════════════════════════════════════════════════════
+   API HELPERS
+   ══════════════════════════════════════════════════════════════════ */
+const SESSION_API = '/api/session';
+const MED_API     = '/api/medicines';
 
-async function apiPost(path, body = null, isFormData = false) {
+async function apiPost(path, body = null, isForm = false) {
   const opts = { method: 'POST' };
-  if (body && !isFormData) {
+  if (body && !isForm) {
     opts.headers = { 'Content-Type': 'application/json' };
     opts.body = JSON.stringify(body);
-  } else if (isFormData) {
-    opts.body = body; // FormData — browser sets Content-Type with boundary
+  } else if (isForm) {
+    opts.body = body; // FormData — no Content-Type header
   }
   const res = await fetch(path, opts);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const err = await res.json().catch(() => ({
+      detail: res.statusText,
+    }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function apiPatch(path, body) {
+  const res = await fetch(path, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({
+      detail: res.statusText,
+    }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
@@ -116,111 +235,167 @@ async function apiPost(path, body = null, isFormData = false) {
 async function apiGet(path) {
   const res = await fetch(path);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    const err = await res.json().catch(() => ({
+      detail: res.statusText,
+    }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
   return res.json();
 }
 
-/* ── Session ────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   SESSION
+   ══════════════════════════════════════════════════════════════════ */
 async function startSession() {
-  const data = await apiPost(`${API}/start`);
+  const data = await apiPost(`${SESSION_API}/start`);
   state.sessionId = data.session_id;
-  els.sessionBadge.textContent = state.sessionId;
+  els.sessionBadge.textContent =
+    state.sessionId.slice(0, 14) + '…';
+  els.sessionBadge.classList.add('active');
   els.sumSid.textContent = state.sessionId;
   return data.session_id;
 }
 
-/* ── Pipeline stage helpers ─────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   PIPELINE STAGE HELPERS
+   ══════════════════════════════════════════════════════════════════ */
+function formatSecs(s) {
+  const m = String(Math.floor(s / 60)).padStart(2, '0');
+  return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function setStage(name, status, detail = '') {
   const s = els.stages[name];
   if (!s) return;
-  // Reset classes
+
+  // Card classes
   s.card.className = `stage-card ${status}`;
+
+  // Status indicator
   s.status.className = `stage-status ${status}`;
-  s.status.textContent = status === 'done' ? '✓' : status === 'error' ? '✕' : '●';
+  s.status.textContent =
+    status === 'done'  ? '✓' :
+    status === 'error' ? '✕' : '●';
+
   if (detail) s.detail.textContent = detail;
+
+  // Elapsed timer management
+  if (status === 'running') {
+    state.stageStartTimes[name] = Date.now();
+    state.stageTimers[name] = setInterval(() => {
+      const sec = Math.floor(
+        (Date.now() - state.stageStartTimes[name]) / 1000,
+      );
+      s.elapsed.textContent = formatSecs(sec);
+    }, 1000);
+  } else {
+    clearInterval(state.stageTimers[name]);
+    if (status !== 'idle') {
+      const sec = state.stageStartTimes[name]
+        ? Math.floor(
+            (Date.now() - state.stageStartTimes[name]) / 1000,
+          )
+        : 0;
+      s.elapsed.textContent = sec > 0
+        ? `${sec}s` : '';
+    } else {
+      s.elapsed.textContent = '';
+    }
+  }
 }
 
 function resetStages() {
-  Object.keys(els.stages).forEach((name) => setStage(name, 'idle', 'Waiting...'));
+  Object.keys(els.stages).forEach((n) =>
+    setStage(n, 'idle', 'Waiting…'),
+  );
+  els.retryRow.style.display = 'none';
 }
 
-/* ── Waveform visualiser ────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   WAVEFORM VISUALISER
+   ══════════════════════════════════════════════════════════════════ */
 function startVisualiser(stream) {
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
   state.analyser = ctx.createAnalyser();
   state.analyser.fftSize = 256;
   src.connect(state.analyser);
+
   const canvas = els.waveform;
-  const canvasCtx = canvas.getContext('2d');
+  const cCtx   = canvas.getContext('2d');
   const bufLen = state.analyser.frequencyBinCount;
-  const dataArr = new Uint8Array(bufLen);
+  const data   = new Uint8Array(bufLen);
 
   function draw() {
-    state.animationFrameId = requestAnimationFrame(draw);
-    state.analyser.getByteTimeDomainData(dataArr);
-    canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-    canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = '#22d3ee';
-    canvasCtx.beginPath();
+    state.animationId = requestAnimationFrame(draw);
+    state.analyser.getByteTimeDomainData(data);
+    cCtx.clearRect(0, 0, canvas.width, canvas.height);
+    cCtx.lineWidth   = 2;
+    cCtx.strokeStyle = '#22d3ee';
+    cCtx.shadowBlur  = 6;
+    cCtx.shadowColor = 'rgba(34,211,238,0.5)';
+    cCtx.beginPath();
     const sliceW = canvas.width / bufLen;
     let x = 0;
     for (let i = 0; i < bufLen; i++) {
-      const v = dataArr[i] / 128.0;
+      const v = data[i] / 128.0;
       const y = (v * canvas.height) / 2;
-      if (i === 0) canvasCtx.moveTo(x, y);
-      else canvasCtx.lineTo(x, y);
+      if (i === 0) cCtx.moveTo(x, y);
+      else cCtx.lineTo(x, y);
       x += sliceW;
     }
-    canvasCtx.lineTo(canvas.width, canvas.height / 2);
-    canvasCtx.stroke();
+    cCtx.lineTo(canvas.width, canvas.height / 2);
+    cCtx.stroke();
   }
   draw();
 }
 
 function stopVisualiser() {
-  if (state.animationFrameId) {
-    cancelAnimationFrame(state.animationFrameId);
-    state.animationFrameId = null;
+  if (state.animationId) {
+    cancelAnimationFrame(state.animationId);
+    state.animationId = null;
   }
   const canvas = els.waveform;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.getContext('2d').clearRect(
+    0, 0, canvas.width, canvas.height,
+  );
 }
 
-/* ── Recording ──────────────────────────────────────────────────── */
-function formatTime(secs) {
-  const m = String(Math.floor(secs / 60)).padStart(2, '0');
-  const s = String(secs % 60).padStart(2, '0');
-  return `${m}:${s}`;
-}
-
+/* ══════════════════════════════════════════════════════════════════
+   RECORDING
+   ══════════════════════════════════════════════════════════════════ */
 async function startRecording() {
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (e) {
+  } catch {
     showToast('Microphone access denied.', 'error');
     return;
   }
+  state.audioChunks  = [];
+  state.isRecording  = true;
 
-  state.audioChunks = [];
-  state.isRecording = true;
   els.btnRecord.classList.add('recording');
-  els.recordHint.textContent = 'Recording… click to stop';
+  els.recordHint.textContent     = 'Recording… click or press Space to stop';
   els.audioActions.style.display = 'none';
-
+  els.uploadAlt.style.display    = 'none';
   startVisualiser(stream);
 
-  // Timer
   state.elapsedSeconds = 0;
   els.timerDisplay.textContent = '00:00';
+  els.timerDisplay.classList.remove('timer-warning');
+
   state.timerInterval = setInterval(() => {
     state.elapsedSeconds++;
-    els.timerDisplay.textContent = formatTime(state.elapsedSeconds);
-    if (state.elapsedSeconds >= 60) stopRecording(); // enforce max
+    els.timerDisplay.textContent =
+      formatSecs(state.elapsedSeconds);
+
+    // 50-second warning
+    if (state.elapsedSeconds === 50) {
+      els.timerDisplay.classList.add('timer-warning');
+      showToast('Recording auto-stops in 10 seconds.', 'info');
+    }
+    if (state.elapsedSeconds >= 60) stopRecording();
   }, 1000);
 
   state.mediaRecorder = new MediaRecorder(stream);
@@ -229,11 +404,10 @@ async function startRecording() {
   });
   state.mediaRecorder.addEventListener('stop', () => {
     stream.getTracks().forEach((t) => t.stop());
-    state.audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
-    state.audioUrl = URL.createObjectURL(state.audioBlob);
-    els.audioPlayer.src = state.audioUrl;
-    els.audioActions.style.display = 'flex';
-    els.btnRunPipeline.disabled = false;
+    state.audioBlob = new Blob(
+      state.audioChunks, { type: 'audio/webm' },
+    );
+    _setAudioBlob(state.audioBlob);
   });
   state.mediaRecorder.start();
 }
@@ -244,162 +418,620 @@ function stopRecording() {
   clearInterval(state.timerInterval);
   stopVisualiser();
   els.btnRecord.classList.remove('recording');
+  els.timerDisplay.classList.remove('timer-warning');
   els.recordHint.textContent = 'Click to record again';
   state.mediaRecorder?.stop();
 }
 
+function _setAudioBlob(blob) {
+  state.audioBlob = blob;
+  state.audioUrl  = URL.createObjectURL(blob);
+  els.audioPlayer.src                = state.audioUrl;
+  els.audioActions.style.display     = 'flex';
+  els.uploadAlt.style.display        = 'flex';
+  els.btnRunPipeline.disabled        = false;
+}
+
+// Record button
 els.btnRecord.addEventListener('click', () => {
   if (state.isRecording) stopRecording();
   else startRecording();
 });
 
-/* ── Full pipeline run ──────────────────────────────────────────── */
+// Space-bar shortcut (Screen 1 only)
+document.addEventListener('keydown', (e) => {
+  if (
+    e.code === 'Space' &&
+    state.currentScreen === 1 &&
+    document.activeElement.tagName !== 'INPUT' &&
+    document.activeElement.tagName !== 'TEXTAREA' &&
+    document.activeElement.tagName !== 'SELECT'
+  ) {
+    e.preventDefault();
+    if (state.isRecording) stopRecording();
+    else startRecording();
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   FILE UPLOAD FALLBACK
+   ══════════════════════════════════════════════════════════════════ */
+els.fileInput.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  showToast(`File loaded: ${file.name}`, 'info');
+  _setAudioBlob(file);
+  els.recordHint.textContent = `📂 ${file.name}`;
+  els.timerDisplay.textContent = '—';
+  // Reset input so same file can be re-selected
+  e.target.value = '';
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   FULL PIPELINE  (Screen 1 → 2 → 3)
+   ══════════════════════════════════════════════════════════════════ */
+els.btnRunPipeline.addEventListener('click', runPipeline);
+
 async function runPipeline() {
-  if (!state.audioBlob) { showToast('No audio recorded.', 'error'); return; }
+  if (!state.audioBlob) {
+    showToast('No audio recorded.', 'error');
+    return;
+  }
+
+  // Persist specialty preference
+  state.specialty = els.selSpecialty.value;
+  savePrefs();
 
   els.btnRunPipeline.disabled = true;
-  activateTab('pipeline');
+  showScreen(2);
   resetStages();
 
   try {
-    // ── Start / reuse session ──────────────────────────────────
     if (!state.sessionId) await startSession();
+    await _runUploadTranscribe();
+    await _runParse();
+    await _runValidate();
 
-    // ── Stage 1: Upload + Transcribe ──────────────────────────
-    setStage('upload', 'running', 'Uploading audio…');
-    setStage('transcribe', 'running', 'Transcribing…');
-
-    const form = new FormData();
-    form.append('file', state.audioBlob, 'recording.webm');
-    const transcribeData = await apiPost(
-      `${API}/${state.sessionId}/upload`, form, true
-    );
-    setStage('upload', 'done', 'Audio saved');
-    setStage('transcribe', 'done', 'Transcript ready');
-
-    els.transcriptText.textContent = transcribeData.transcript;
-    els.transcriptPanel.style.display = 'block';
-
-    // ── Stage 2: LLM Parse ────────────────────────────────────
-    setStage('parse', 'running', 'Calling LLM…');
-    const parseData = await apiPost(`${API}/${state.sessionId}/parse`);
-    setStage('parse', 'done', `${parseData.medications.length} medication(s) found`);
-
-    // ── Stage 3: Validate ─────────────────────────────────────
-    setStage('validate', 'running', 'Matching database…');
-    const validateData = await apiPost(`${API}/${state.sessionId}/validate`);
-    setStage('validate', 'done', `${validateData.medications.length} validated`);
-
-    // ── Stage 4: Export PDF ───────────────────────────────────
-    setStage('export', 'running', 'Generating PDF…');
-    const exportData = await apiPost(`${API}/${state.sessionId}/export`);
-    setStage('export', 'done', 'PDF ready');
-
-    // ── Populate Prescription tab ─────────────────────────────
-    renderPrescription(parseData, validateData.medications);
-
-    // ── Populate Export tab ───────────────────────────────────
-    setupExport(exportData.pdf_url, validateData.medications.length);
-
-    showToast('Pipeline complete! Review your prescription.', 'success');
-    setTimeout(() => activateTab('prescription'), 600);
+    // Advance to editor with short delay
+    setTimeout(() => showScreen(3), 500);
 
   } catch (err) {
-    // Find which stage was running and mark it error
+    // Mark any still-running stage as errored
     Object.keys(els.stages).forEach((name) => {
-      if (els.stages[name].card.classList.contains('running')) {
+      if (
+        els.stages[name].card.classList.contains('running')
+      ) {
         setStage(name, 'error', err.message);
+        state.lastFailedStage = name;
       }
     });
+    els.retryRow.style.display = 'flex';
     showToast(`Error: ${err.message}`, 'error');
     els.btnRunPipeline.disabled = false;
   }
 }
 
-els.btnRunPipeline.addEventListener('click', runPipeline);
+async function _runUploadTranscribe() {
+  setStage('upload',     'running', 'Uploading audio…');
+  setStage('transcribe', 'running', 'Transcribing…');
 
-/* ── Prescription renderer ──────────────────────────────────────── */
-function renderPrescription(parseData, validatedMeds) {
-  const pat = parseData.patient;
-  els.rxName.textContent     = pat.name || '—';
-  els.rxAge.textContent      = pat.age || '—';
-  els.rxGender.textContent   = pat.gender || '—';
-  els.rxPid.textContent      = pat.id || '—';
-  els.rxDiagnosis.textContent= parseData.diagnosis || '';
+  const form = new FormData();
+  form.append('file', state.audioBlob, 'recording.webm');
 
-  // Medications
+  const txData = await apiPost(
+    `${SESSION_API}/${state.sessionId}/upload`,
+    form, true,
+  );
+  setStage('upload',     'done', 'Audio saved');
+  setStage('transcribe', 'done', 'Transcript ready');
+
+  els.transcriptText.textContent = txData.transcript;
+  els.transcriptPanel.style.display = 'block';
+}
+
+async function _runParse() {
+  setStage('parse', 'running', 'Calling AI model…');
+  const parseData = await apiPost(
+    `${SESSION_API}/${state.sessionId}/parse`,
+  );
+  setStage('parse', 'done',
+    `${parseData.medications.length} medication(s) found`);
+  state.lastParseData = parseData;
+}
+
+async function _runValidate() {
+  setStage('validate', 'running', 'Matching medicines database…');
+  const valData = await apiPost(
+    `${SESSION_API}/${state.sessionId}/validate` +
+    `?specialty=${state.specialty}`,
+  );
+  setStage('validate', 'done',
+    `${valData.medications.length} validated`);
+  state.lastValidData = valData;
+  renderEditor(state.lastParseData, valData.medications);
+}
+
+/* Retry button */
+els.btnRetry.addEventListener('click', async () => {
+  els.retryRow.style.display = 'none';
+  try {
+    // Re-run from failed stage
+    const f = state.lastFailedStage;
+    if (f === 'upload' || f === 'transcribe') {
+      await _runUploadTranscribe();
+      await _runParse();
+      await _runValidate();
+    } else if (f === 'parse') {
+      await _runParse();
+      await _runValidate();
+    } else if (f === 'validate') {
+      await _runValidate();
+    }
+    setTimeout(() => showScreen(3), 500);
+  } catch (err) {
+    els.retryRow.style.display = 'flex';
+    showToast(`Retry failed: ${err.message}`, 'error');
+  }
+});
+
+/* Back to re-record */
+els.btnBackToRec.addEventListener('click', () => {
+  showScreen(1);
+  els.btnRunPipeline.disabled = false;
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   RX EDITOR RENDERER  (Screen 3)
+   ══════════════════════════════════════════════════════════════════ */
+const FREQ_OPTIONS = [
+  { value: 'OD',  label: 'OD — Once Daily' },
+  { value: 'BD',  label: 'BD — Twice Daily' },
+  { value: 'TDS', label: 'TDS — Three Times Daily' },
+  { value: 'QID', label: 'QID — Four Times Daily' },
+  { value: 'SOS', label: 'SOS — As Needed' },
+  { value: 'HS',  label: 'HS — At Bedtime' },
+  { value: 'PRN', label: 'PRN — When Required' },
+  { value: 'CUSTOM', label: '✏ Custom…' },
+];
+
+function renderEditor(parseData, validatedMeds) {
+  const pat = parseData.patient || {};
+  els.rxName.value   = pat.name   || '';
+  els.rxAge.value    = pat.age    || '';
+  els.rxGender.value = pat.gender || '';
+  els.rxPid.value    = pat.id     || '';
+  els.rxDiagnosis.value = parseData.diagnosis || '';
+  els.rxComplaints.value =
+    (parseData.complaints || []).join('\n');
+  els.rxInvestigations.value =
+    (parseData.investigations || []).join('\n');
+  els.rxNotes.value = parseData.notes || '';
+
   els.medTbody.innerHTML = '';
-  const meds = validatedMeds.length ? validatedMeds : parseData.medications;
-  meds.forEach((med, i) => {
-    const score = med.match_score ?? 0;
-    const scoreClass = score >= 80 ? 'score-good' : score >= 60 ? 'score-ok' : 'score-bad';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${i + 1}</td>
-      <td><strong>${med.matched_name || med.name}</strong>
-          ${med.matched_name && med.matched_name !== med.name
-            ? `<br><span style="font-size:0.75rem;color:var(--color-text-muted)">${med.name}</span>`
-            : ''}</td>
-      <td><span class="score-badge ${scoreClass}">${score}</span></td>
-      <td>${med.dosage || '—'}</td>
-      <td>${med.frequency || '—'}</td>
-      <td>${med.duration || '—'}</td>
-      <td>${med.instructions || '—'}</td>
-      <td>${med.price || '—'}</td>
-      <td>${med.manufacturer || '—'}</td>
-    `;
-    els.medTbody.appendChild(tr);
+  const meds =
+    validatedMeds?.length ? validatedMeds : parseData.medications;
+  meds.forEach((med) => addMedRow(med));
+
+  updateApproveBarInfo();
+}
+
+function scoreToTip(score) {
+  if (score >= 90) return 'Exact match ✓';
+  if (score >= 80) return 'High confidence match';
+  if (score >= 65) return 'Good match — verify';
+  if (score >= 50) return 'Low confidence — check manually';
+  return 'No reliable match found';
+}
+
+function buildScoreBadge(score) {
+  const cls =
+    score >= 80 ? 'score-good' :
+    score >= 60 ? 'score-ok'   : 'score-bad';
+  return `<span class="score-badge ${cls}"
+    data-tip="${scoreToTip(score)}">${score}</span>`;
+}
+
+function _buildFreqOptions(current) {
+  const norm = (current || '').toUpperCase().trim();
+  const known = FREQ_OPTIONS.some(
+    (o) => o.value !== 'CUSTOM' && o.value === norm,
+  );
+  return FREQ_OPTIONS.map((o) => {
+    const sel =
+      o.value === 'CUSTOM'
+        ? (!known && norm ? ' selected' : '')
+        : o.value === norm ? ' selected' : '';
+    return `<option value="${o.value}"${sel}>${o.label}</option>`;
+  }).join('');
+}
+
+function addMedRow(med = {}) {
+  const tr = document.createElement('tr');
+  tr.className = 'med-row';
+  const rowIndex =
+    els.medTbody.querySelectorAll('tr').length + 1;
+  const score     = med.match_score ?? 0;
+  const freqVal   = med.frequency || '';
+  const norm      = freqVal.toUpperCase().trim();
+  const isCustom  =
+    freqVal && !FREQ_OPTIONS.some(
+      (o) => o.value !== 'CUSTOM' && o.value === norm,
+    );
+
+  tr.innerHTML = `
+    <td class="td-drag" aria-label="drag handle">⠿</td>
+    <td class="td-num">${rowIndex}</td>
+    <td class="td-name">
+      <div class="ac-wrap">
+        <input
+          class="rx-input med-name-input"
+          type="text"
+          value="${escHtml(med.matched_name || med.name || '')}"
+          placeholder="Medicine name"
+          autocomplete="off"
+          aria-label="Medicine name"
+        />
+        <div class="ac-spinner" hidden></div>
+      </div>
+    </td>
+    <td class="td-score">${buildScoreBadge(score)}</td>
+    <td>
+      <input class="rx-input med-field" type="text"
+        value="${escHtml(med.dosage || '')}"
+        placeholder="500mg"
+        aria-label="Dosage" />
+    </td>
+    <td style="min-width:130px">
+      <select class="rx-input med-field freq-select"
+        aria-label="Frequency">
+        ${_buildFreqOptions(freqVal)}
+      </select>
+      <input class="rx-input med-field freq-custom${
+        isCustom ? ' visible' : ''
+      }"
+        type="text"
+        value="${isCustom ? escHtml(freqVal) : ''}"
+        placeholder="e.g. every 8 hrs"
+        aria-label="Custom frequency" />
+    </td>
+    <td>
+      <input class="rx-input med-field" type="text"
+        value="${escHtml(med.duration || '')}"
+        placeholder="5 days"
+        aria-label="Duration" />
+    </td>
+    <td>
+      <input class="rx-input med-field" type="text"
+        value="${escHtml(med.instructions || '')}"
+        placeholder="after meals"
+        aria-label="Instructions" />
+    </td>
+    <td>
+      <button class="del-btn" aria-label="Delete row"
+        title="Remove medication">✕</button>
+    </td>
+  `;
+
+  // Autocomplete on name input
+  const nameInput = tr.querySelector('.med-name-input');
+  const spinner   = tr.querySelector('.ac-spinner');
+  nameInput.addEventListener('input',
+    () => onMedInput(nameInput, spinner));
+  nameInput.addEventListener('focus', () => {
+    state.acTargetInput = nameInput;
   });
 
-  els.medCountBadge.textContent = `${meds.length} medication${meds.length !== 1 ? 's' : ''}`;
+  // Frequency custom toggle
+  const freqSel  = tr.querySelector('.freq-select');
+  const freqCust = tr.querySelector('.freq-custom');
+  freqSel.addEventListener('change', () => {
+    const isC = freqSel.value === 'CUSTOM';
+    freqCust.classList.toggle('visible', isC);
+    if (isC) freqCust.focus();
+  });
 
-  if (parseData.notes) {
-    els.rxNotes.textContent = parseData.notes;
-    els.notesCard.style.display = 'block';
-  } else {
-    els.notesCard.style.display = 'none';
-  }
+  // Delete row
+  tr.querySelector('.del-btn').addEventListener('click', () => {
+    tr.remove();
+    renumberRows();
+    updateApproveBarInfo();
+  });
 
-  els.rxEmpty.style.display   = 'none';
-  els.rxContent.style.display = 'block';
+  els.medTbody.appendChild(tr);
+  updateApproveBarInfo();
 }
 
-/* ── Export tab setup ───────────────────────────────────────────── */
-function setupExport(pdfUrl, medCount) {
-  els.btnExportPdf.disabled = false;
-  els.exportStatus.textContent = 'PDF is ready to download.';
+function renumberRows() {
+  els.medTbody.querySelectorAll('tr').forEach((tr, i) => {
+    tr.querySelector('.td-num').textContent = i + 1;
+  });
+}
 
-  els.btnExportPdf.onclick = () => {
-    els.btnDownloadPdf.href = pdfUrl;
-    els.btnDownloadPdf.style.display = 'inline-flex';
-    els.btnDownloadPdf.click();
-    showToast('PDF downloaded!', 'success');
+function updateApproveBarInfo() {
+  const count =
+    els.medTbody.querySelectorAll('tr.med-row').length;
+  els.approveBarInfo.innerHTML =
+    `<strong>${count}</strong> medication${
+      count !== 1 ? 's' : ''
+    } — verify before approving`;
+}
+
+els.btnAddMed.addEventListener('click', () => {
+  addMedRow();
+  // Scroll to new row
+  const lastRow = els.medTbody.lastElementChild;
+  lastRow?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   MEDICINE AUTOCOMPLETE
+   ══════════════════════════════════════════════════════════════════ */
+function onMedInput(input, spinner) {
+  clearTimeout(state.acDebounceTimer);
+  const q = input.value.trim();
+  if (q.length < 2) { hideDropdown(); return; }
+  state.acDebounceTimer = setTimeout(
+    () => fetchSuggestions(input, spinner, q),
+    280,
+  );
+}
+
+async function fetchSuggestions(input, spinner, q) {
+  spinner.hidden = false;
+  try {
+    const url =
+      `${MED_API}/search?q=${encodeURIComponent(q)}` +
+      `&specialty=${state.specialty}&limit=8`;
+    const data = await apiGet(url);
+    spinner.hidden = true;
+    showDropdown(input, data.results);
+  } catch {
+    spinner.hidden = true;
+    hideDropdown();
+  }
+}
+
+function showDropdown(input, results) {
+  if (!results?.length) { hideDropdown(); return; }
+  state.acTargetInput = input;
+
+  const rect = input.getBoundingClientRect();
+  const dd   = els.acDropdown;
+  dd.style.top   = `${rect.bottom + window.scrollY + 4}px`;
+  dd.style.left  = `${rect.left   + window.scrollX}px`;
+  dd.style.width = `${Math.max(rect.width, 260)}px`;
+  dd.hidden = false;
+
+  els.acList.innerHTML = '';
+  results.forEach((r) => {
+    const li = document.createElement('li');
+    li.className = 'ac-item';
+    li.setAttribute('role', 'option');
+    li.innerHTML = `
+      <span class="ac-name">${escHtml(r.name)}</span>
+      <span class="ac-meta">
+        <span class="score-badge ${
+          r.score >= 80 ? 'score-good' :
+          r.score >= 60 ? 'score-ok'   : 'score-bad'
+        }" data-tip="${scoreToTip(r.score)}">${r.score}</span>
+        ${r.manufacturer
+          ? `<span class="ac-mfr">${escHtml(r.manufacturer)}</span>`
+          : ''}
+      </span>
+    `;
+    li.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      selectSuggestion(r);
+    });
+    els.acList.appendChild(li);
+  });
+}
+
+function selectSuggestion(result) {
+  if (state.acTargetInput) {
+    state.acTargetInput.value = result.name;
+    // Update score badge
+    const row = state.acTargetInput.closest('tr');
+    if (row) {
+      const scoreTd = row.querySelector('.td-score');
+      if (scoreTd) scoreTd.innerHTML = buildScoreBadge(result.score);
+    }
+  }
+  hideDropdown();
+}
+
+function hideDropdown() {
+  els.acDropdown.hidden = true;
+  els.acList.innerHTML  = '';
+}
+
+document.addEventListener('click', (e) => {
+  if (
+    !els.acDropdown.contains(e.target) &&
+    e.target !== state.acTargetInput
+  ) hideDropdown();
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   COLLECT EDITS
+   ══════════════════════════════════════════════════════════════════ */
+function collectEdits() {
+  const meds = [];
+  els.medTbody.querySelectorAll('tr.med-row').forEach((tr) => {
+    const nameIn  = tr.querySelector('.med-name-input');
+    const fields  = tr.querySelectorAll('.med-field');
+    // fields[0]=dosage, fields[1]=freq-select,
+    // fields[2]=freq-custom, fields[3]=duration, fields[4]=instruct
+    const freqSel  = tr.querySelector('.freq-select');
+    const freqCust = tr.querySelector('.freq-custom');
+
+    let freqVal;
+    if (freqSel.value === 'CUSTOM') {
+      freqVal = freqCust.value.trim() || 'As directed';
+    } else {
+      freqVal = freqSel.value || 'OD';
+    }
+
+    meds.push({
+      name:         nameIn?.value.trim()   || '',
+      dosage:       fields[0]?.value.trim() || 'Not specified',
+      frequency:    freqVal,
+      duration:     fields[3]?.value.trim() || 'Not specified',
+      instructions: fields[4]?.value.trim() || '',
+    });
+  });
+
+  return {
+    patient_name:   els.rxName.value.trim()         || null,
+    patient_age:    els.rxAge.value.trim()           || null,
+    patient_gender: els.rxGender.value               || null,
+    patient_id:     els.rxPid.value.trim()           || null,
+    complaints:     els.rxComplaints.value
+      .split('\n').map((s) => s.trim()).filter(Boolean),
+    diagnosis:      els.rxDiagnosis.value.trim()     || null,
+    medications:    meds,
+    investigations: els.rxInvestigations.value
+      .split('\n').map((s) => s.trim()).filter(Boolean),
+    notes:          els.rxNotes.value.trim()         || null,
   };
+}
 
-  els.btnDownloadPdf.href = pdfUrl;
-  els.btnDownloadPdf.download = `prescription_${state.sessionId}.pdf`;
-  els.btnDownloadPdf.style.display = 'inline-flex';
+/* ══════════════════════════════════════════════════════════════════
+   APPROVE & EXPORT  (Screen 3 → 4)
+   ══════════════════════════════════════════════════════════════════ */
+els.btnApprove.addEventListener('click', approveAndExport);
 
-  // Summary
-  els.sumStatus.textContent  = '✓ Complete';
-  els.sumStatus.style.color  = 'var(--color-green)';
-  els.sumMeds.textContent    = `${medCount} medication${medCount !== 1 ? 's' : ''}`;
-  els.sumElapsed.textContent = 'Done';
+async function approveAndExport() {
+  els.btnApprove.disabled    = true;
+  els.btnApprove.textContent = '⏳ Generating…';
 
-  // Fetch elapsed from API
-  if (state.sessionId) {
-    apiGet(`${API}/${state.sessionId}`)
-      .then((s) => { els.sumElapsed.textContent = `${s.elapsed}s`; })
-      .catch(() => {});
+  try {
+    const edits = collectEdits();
+
+    // Persist edits
+    await apiPatch(
+      `${SESSION_API}/${state.sessionId}/update`,
+      edits,
+    );
+
+    // Generate PDF
+    const exportData = await apiPost(
+      `${SESSION_API}/${state.sessionId}/export`,
+    );
+
+    // Elapsed
+    let elapsed = '—';
+    try {
+      const s = await apiGet(
+        `${SESSION_API}/${state.sessionId}`,
+      );
+      elapsed = `${Math.round(s.elapsed)}s`;
+    } catch { /* non-fatal */ }
+
+    // Populate Screen 4
+    const pdfUrl = exportData.pdf_url;
+    els.btnDownloadPdf.href     = pdfUrl;
+    els.btnDownloadPdf.download =
+      `prescription_${state.sessionId}.pdf`;
+
+    // Inline PDF preview
+    els.pdfIframe.src             = pdfUrl;
+    els.pdfPreviewWrap.style.display = 'block';
+
+    // Summary
+    els.sumSid.textContent     = state.sessionId;
+    els.sumPatient.textContent = els.rxName.value || 'Unknown';
+    const mc = edits.medications.length;
+    els.sumMeds.textContent    =
+      `${mc} medication${mc !== 1 ? 's' : ''}`;
+    els.sumElapsed.textContent = elapsed;
+
+    showScreen(4);
+    showToast('Prescription approved! ✓', 'success');
+
+  } catch (err) {
+    showToast(`Export failed: ${err.message}`, 'error');
+    els.btnApprove.disabled    = false;
+    els.btnApprove.textContent = '✅ Approve & Generate PDF';
   }
 }
 
-/* ── Init ───────────────────────────────────────────────────────── */
+/* Back to edit from Screen 4 */
+els.btnBackToEdit.addEventListener('click', () => showScreen(3));
+
+/* Print */
+els.btnPrint.addEventListener('click', () => {
+  const iframe = els.pdfIframe;
+  try {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  } catch {
+    // Fallback: open PDF in new tab for printing
+    window.open(els.btnDownloadPdf.href, '_blank');
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   NEW SESSION  (Screen 4 → 1)
+   ══════════════════════════════════════════════════════════════════ */
+els.btnNewSession.addEventListener('click', resetToStart);
+
+function resetToStart() {
+  state.sessionId       = null;
+  state.audioBlob       = null;
+  state.audioUrl        = null;
+  state.audioChunks     = [];
+  state.isRecording     = false;
+  state.elapsedSeconds  = 0;
+  state.lastParseData   = null;
+  state.lastValidData   = null;
+  state.lastFailedStage = null;
+
+  els.audioActions.style.display      = 'none';
+  els.uploadAlt.style.display         = 'flex';
+  els.audioPlayer.src                 = '';
+  els.timerDisplay.textContent        = '00:00';
+  els.timerDisplay.classList.remove('timer-warning');
+  els.recordHint.textContent          = 'Click to start recording';
+  els.btnRecord.classList.remove('recording');
+  els.btnRunPipeline.disabled         = true;
+  els.sessionBadge.textContent        = 'No session';
+  els.sessionBadge.classList.remove('active');
+
+  resetStages();
+  els.transcriptPanel.style.display   = 'none';
+  els.transcriptText.textContent      = '';
+
+  els.medTbody.innerHTML              = '';
+  els.btnApprove.disabled             = false;
+  els.btnApprove.textContent          = '✅ Approve & Generate PDF';
+
+  els.pdfPreviewWrap.style.display    = 'none';
+  els.pdfIframe.src                   = '';
+
+  startSession().catch(() => {});
+  showScreen(1);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UTILITY
+   ══════════════════════════════════════════════════════════════════ */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════════════════════════════ */
 (async () => {
-  // Pre-create session on page load so the ID is visible immediately
+  loadPrefs();
   try {
     await startSession();
-  } catch (_) {
-    // Server may not be ready yet — session created on first run
+  } catch {
+    /* Server may not be ready yet — silent fail */
   }
 })();

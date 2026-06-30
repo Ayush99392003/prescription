@@ -31,6 +31,7 @@ JSON schema:
     "gender": "string or null",
     "id": "string or null"
   },
+  "complaints": ["string"],
   "diagnosis": "string",
   "medications": [
     {
@@ -41,12 +42,17 @@ JSON schema:
       "instructions": "string"
     }
   ],
+  "investigations": ["string"],
   "notes": "string"
 }
 
 Rules:
 - Output ONLY the raw JSON object.
 - Use "Not specified" for missing string values.
+- Extract symptoms / chief complaints into the complaints list. Include the
+  full symptom description along with any specified durations, severity,
+  or remarks (e.g., "vomiting for 4 days") instead of single keywords.
+- Extract ordered tests/scans/diagnostics into the investigations list.
 - Extract every drug mentioned into the medications list.
 - Use exact brand/generic names as spoken.
 """

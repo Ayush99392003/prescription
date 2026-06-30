@@ -120,11 +120,31 @@ def generate_pdf(session: "PrescriptionSession") -> str:
     pdf.cell(0, 6, f"Patient ID: {pat.id or 'N/A'}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
+    # ── Complaints ──────────────────────────────────────────────
+    if rx.complaints:
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(30, 80, 160)
+        pdf.set_fill_color(235, 242, 255)
+        pdf.cell(
+            0,
+            7,
+            "  CHIEF COMPLAINTS",
+            fill=True,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(30, 30, 30)
+        pdf.multi_cell(0, 6, ", ".join(rx.complaints))
+        pdf.ln(4)
+
     # ── Diagnosis ───────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(30, 80, 160)
     pdf.set_fill_color(235, 242, 255)
-    pdf.cell(0, 7, "  DIAGNOSIS", fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0, 7, "  DIAGNOSIS", fill=True, new_x="LMARGIN", new_y="NEXT"
+    )
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(30, 30, 30)
     pdf.multi_cell(0, 6, rx.diagnosis)
@@ -139,6 +159,25 @@ def generate_pdf(session: "PrescriptionSession") -> str:
 
     _draw_med_table(pdf, session)
     pdf.ln(6)
+
+    # ── Investigations ──────────────────────────────────────────
+    if rx.investigations:
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(30, 80, 160)
+        pdf.set_fill_color(235, 242, 255)
+        pdf.cell(
+            0,
+            7,
+            "  INVESTIGATIONS ORDERED",
+            fill=True,
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.ln(2)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(30, 30, 30)
+        pdf.multi_cell(0, 6, ", ".join(rx.investigations))
+        pdf.ln(4)
 
     # ── Notes ────────────────────────────────────────────────────
     if rx.notes:
@@ -172,7 +211,7 @@ def generate_pdf(session: "PrescriptionSession") -> str:
         ) from exc
 
     console.print(
-        f"[green]✓ PDF saved →[/green] [bold]{out_path}[/bold]"
+        f"[green]PDF saved ->[/green] [bold]{out_path}[/bold]"
     )
     return str(out_path)
 
@@ -181,16 +220,16 @@ def _draw_med_table(
     pdf: PrescriptionPDF,
     session: "PrescriptionSession",
 ) -> None:
-    """Render the medications table with validated pricing data."""
-    # Column widths (mm) — must sum to 190 (A4 - margins)
+    """Render the medications table with simplified frequency."""
+    from server.core.session import translate_frequency
+
+    # Column widths (mm)
     col_w = {
-        "Medicine": 45,
+        "Medicine": 65,
         "Dosage": 22,
         "Frequency": 28,
         "Duration": 22,
-        "Instructions": 43,
-        "Price": 18,
-        "Manufacturer": 22,
+        "Instructions": 63,
     }
     headers = list(col_w.keys())
     widths = list(col_w.values())
@@ -204,8 +243,6 @@ def _draw_med_table(
     pdf.ln()
 
     # ── Data rows ───────────────────────────────────────────────
-    # Row height used for short fixed columns; long-text columns
-    # use multi_cell which handles wrapping automatically.
     row_h = 6
     pdf.set_text_color(30, 30, 30)
     pdf.set_font("Helvetica", "", 7)
@@ -250,10 +287,8 @@ def _draw_med_table(
                 # Short column: fixed cell, padded to actual_h
                 val_map = {
                     "Dosage": med.dosage,
-                    "Frequency": med.frequency,
+                    "Frequency": translate_frequency(med.frequency),
                     "Duration": med.duration,
-                    "Price": med.price or "N/A",
-                    "Manufacturer": (med.manufacturer or "N/A")[:16],
                 }
                 pdf.cell(
                     w, actual_h,

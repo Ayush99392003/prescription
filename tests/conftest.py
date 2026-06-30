@@ -46,6 +46,7 @@ def minimal_prescription() -> PrescriptionSchema:
     """A minimal valid PrescriptionSchema with one medication."""
     return PrescriptionSchema(
         patient=PatientInfo(name="Ravi Kumar", age="35", gender="M"),
+        complaints=["Sore throat", "Fever for 2 days"],
         diagnosis="Upper Respiratory Tract Infection",
         medications=[
             Medication(
@@ -56,6 +57,7 @@ def minimal_prescription() -> PrescriptionSchema:
                 instructions="Take after meals with water",
             )
         ],
+        investigations=["CBC", "Throat swab"],
         notes="Rest and stay hydrated.",
     )
 

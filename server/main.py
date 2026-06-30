@@ -146,7 +146,9 @@ def _stage_validate(session: PrescriptionSession) -> None:
         sys.exit(1)
 
     for med in session.prescription.medications:
-        result = fuzzy_matcher.find_best_match(med.name)
+        result = fuzzy_matcher.find_best_match(
+            med.name, specialty=config.CLINIC_SPECIALTY
+        )
         vm = ValidatedMedication(
             name=med.name,
             dosage=med.dosage,

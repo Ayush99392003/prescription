@@ -55,3 +55,26 @@ class PrescriptionSession:
     def is_complete(self) -> bool:
         """True when a PDF has been successfully generated."""
         return self.pdf_path is not None
+
+
+FREQUENCY_MAP = {
+    "od": "Once daily",
+    "qd": "Once daily",
+    "bd": "Twice daily",
+    "bid": "Twice daily",
+    "tds": "3 times a day",
+    "tid": "3 times a day",
+    "qds": "4 times a day",
+    "qid": "4 times a day",
+    "hs": "At bedtime (nightly)",
+    "sos": "As needed (emergency)",
+    "prn": "As needed",
+}
+
+
+def translate_frequency(freq: str) -> str:
+    """Translate standard frequency shorthand to simpler terms."""
+    if not freq:
+        return "Not specified"
+    clean = freq.strip().lower()
+    return FREQUENCY_MAP.get(clean, freq)

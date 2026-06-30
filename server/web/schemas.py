@@ -51,8 +51,10 @@ class SessionStatusResponse(BaseModel):
     has_pdf: bool
     transcript: Optional[str] = None
     patient: Optional[PatientOut] = None
+    complaints: list[str] = []
     diagnosis: Optional[str] = None
     medications: list[MedicationOut] = []
+    investigations: list[str] = []
     notes: Optional[str] = None
     pdf_path: Optional[str] = None
 
@@ -69,8 +71,10 @@ class ParseResponse(BaseModel):
 
     session_id: str
     patient: PatientOut
+    complaints: list[str]
     diagnosis: str
     medications: list[MedicationOut]
+    investigations: list[str]
     notes: str
 
 
@@ -92,3 +96,49 @@ class ErrorResponse(BaseModel):
     """Standard error envelope."""
 
     detail: str
+
+
+# ── New models for state-driven UI ───────────────────────────────────
+
+
+class MedicationEditIn(BaseModel):
+    """A single medication row submitted from the editor form."""
+
+    name: str
+    dosage: str = "Not specified"
+    frequency: str = "Not specified"
+    duration: str = "Not specified"
+    instructions: str = ""
+
+
+class SessionUpdateRequest(BaseModel):
+    """
+    Request body for PATCH /api/session/{sid}/update.
+    Doctor-edited fields from the Rx Editor screen.
+    """
+
+    patient_name: Optional[str] = None
+    patient_age: Optional[str] = None
+    patient_gender: Optional[str] = None
+    patient_id: Optional[str] = None
+    complaints: Optional[list[str]] = None
+    diagnosis: Optional[str] = None
+    medications: Optional[list[MedicationEditIn]] = None
+    investigations: Optional[list[str]] = None
+    notes: Optional[str] = None
+
+
+class MedicineSearchResult(BaseModel):
+    """A single autocomplete candidate returned from the search API."""
+
+    name: str
+    score: int
+    price: Optional[str] = None
+    manufacturer: Optional[str] = None
+
+
+class MedicineSearchResponse(BaseModel):
+    """Wrapper returned by GET /api/medicines/search."""
+
+    query: str
+    results: list[MedicineSearchResult]

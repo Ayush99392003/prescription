@@ -81,12 +81,31 @@ uv sync
 
 # Copy and configure environment
 cp .env.example .env          # set GROQ_API_KEY if using Groq
+```
 
-# Run
+### Terminal Interface
+
+To run the terminal-based interactive dashboard:
+
+```bash
 uv run prescription
 # or
 uv run python -m server.main
 ```
+
+### Web Interface (Server & Client)
+
+To run the Web UI dashboard (starts the FastAPI backend which serves the
+frontend SPA client):
+
+```bash
+uv run prescription-web
+# or
+uv run python -m server.web.app
+```
+
+Once running, open your browser and navigate to:
+[http://localhost:8000](http://localhost:8000)
 
 ---
 

@@ -11,10 +11,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from server import config
+from server.core.schemas import Medication, PatientInfo
 from server.core.session import ValidatedMedication
 from server.data import fuzzy_matcher, indexer
 from server.export.pdf_generator import generate_pdf
@@ -23,15 +24,19 @@ from server.web.schemas import (
     ErrorResponse,
     ExportResponse,
     MedicationOut,
+    MedicineSearchResponse,
+    MedicineSearchResult,
     ParseResponse,
     PatientOut,
     SessionCreatedResponse,
     SessionStatusResponse,
+    SessionUpdateRequest,
     TranscribeResponse,
     ValidateResponse,
 )
 
 router = APIRouter(prefix="/api/session", tags=["session"])
+med_router = APIRouter(prefix="/api/medicines", tags=["medicines"])
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -49,12 +54,14 @@ def _get_or_404(sid: str):
 
 def _med_out(med: ValidatedMedication) -> MedicationOut:
     """Convert a ValidatedMedication dataclass to the API model."""
+    from server.core.session import translate_frequency
+
     return MedicationOut(
         name=med.name,
         matched_name=med.matched_name,
         match_score=med.match_score,
         dosage=med.dosage,
-        frequency=med.frequency,
+        frequency=translate_frequency(med.frequency),
         duration=med.duration,
         instructions=med.instructions,
         price=med.price,
@@ -127,6 +134,8 @@ def get_session(sid: str) -> SessionStatusResponse:
 
     patient = None
     diagnosis = None
+    complaints = []
+    investigations = []
     notes = None
     if rx is not None:
         patient = PatientOut(
@@ -136,6 +145,8 @@ def get_session(sid: str) -> SessionStatusResponse:
             id=rx.patient.id,
         )
         diagnosis = rx.diagnosis
+        complaints = rx.complaints
+        investigations = rx.investigations
         notes = rx.notes
 
     return SessionStatusResponse(
@@ -147,8 +158,10 @@ def get_session(sid: str) -> SessionStatusResponse:
         has_pdf=session.pdf_path is not None,
         transcript=session.transcript,
         patient=patient,
+        complaints=complaints,
         diagnosis=diagnosis,
         medications=[_med_out(m) for m in session.validated_meds],
+        investigations=investigations,
         notes=notes,
         pdf_path=session.pdf_path,
     )
@@ -236,13 +249,19 @@ def parse_transcript(sid: str) -> ParseResponse:
             gender=rx.patient.gender,
             id=rx.patient.id,
         ),
+        complaints=rx.complaints,
         diagnosis=rx.diagnosis,
         medications=[
-            MedicationOut(name=m.name, dosage=m.dosage,
-                          frequency=m.frequency, duration=m.duration,
-                          instructions=m.instructions)
+            MedicationOut(
+                name=m.name,
+                dosage=m.dosage,
+                frequency=m.frequency,
+                duration=m.duration,
+                instructions=m.instructions,
+            )
             for m in rx.medications
         ],
+        investigations=rx.investigations,
         notes=rx.notes,
     )
 
@@ -252,7 +271,10 @@ def parse_transcript(sid: str) -> ParseResponse:
     response_model=ValidateResponse,
     summary="Fuzzy-match medications against the medicines database",
 )
-def validate_medications(sid: str) -> ValidateResponse:
+def validate_medications(
+    sid: str,
+    specialty: str | None = None,
+) -> ValidateResponse:
     """
     Cross-reference each extracted medication against the Indian
     medicines dataset using rapidfuzz.
@@ -269,9 +291,12 @@ def validate_medications(sid: str) -> ValidateResponse:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    active_specialty = specialty or config.CLINIC_SPECIALTY
     session.validated_meds = []
     for med in session.prescription.medications:
-        result = fuzzy_matcher.find_best_match(med.name)
+        result = fuzzy_matcher.find_best_match(
+            med.name, specialty=active_specialty
+        )
         vm = ValidatedMedication(
             name=med.name,
             dosage=med.dosage,
@@ -352,3 +377,116 @@ def download_pdf(sid: str) -> FileResponse:
         media_type="application/pdf",
         filename=f"prescription_{sid}.pdf",
     )
+
+
+# ── Doctor edits ───────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/{sid}/update",
+    summary="Persist doctor-edited prescription fields",
+)
+def update_session(
+    sid: str,
+    body: SessionUpdateRequest,
+) -> dict:
+    """
+    Accept edited prescription fields from the Rx Editor screen and
+    write them back into the in-memory session object so the next
+    PDF export uses the corrected data.
+    """
+    session = _get_or_404(sid)
+    rx = session.prescription
+
+    if rx is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No prescription to update. Run /parse first.",
+        )
+
+    # Patch patient fields
+    if body.patient_name is not None:
+        rx.patient.name = body.patient_name
+    if body.patient_age is not None:
+        rx.patient.age = body.patient_age
+    if body.patient_gender is not None:
+        rx.patient.gender = body.patient_gender
+    if body.patient_id is not None:
+        rx.patient.id = body.patient_id
+
+    # Patch clinical fields
+    if body.complaints is not None:
+        rx.complaints = body.complaints
+    if body.diagnosis is not None:
+        rx.diagnosis = body.diagnosis
+    if body.investigations is not None:
+        rx.investigations = body.investigations
+    if body.notes is not None:
+        rx.notes = body.notes
+
+    # Patch medications — rebuild ValidatedMedication list
+    if body.medications is not None:
+        session.validated_meds = [
+            ValidatedMedication(
+                name=m.name,
+                dosage=m.dosage,
+                frequency=m.frequency,
+                duration=m.duration,
+                instructions=m.instructions,
+            )
+            for m in body.medications
+        ]
+        # Also keep core prescription medications in sync
+        rx.medications = [
+            Medication(
+                name=m.name,
+                dosage=m.dosage,
+                frequency=m.frequency,
+                duration=m.duration,
+                instructions=m.instructions,
+            )
+            for m in body.medications
+        ]
+
+    return {"ok": True, "session_id": sid}
+
+
+# ── Medicine autocomplete ──────────────────────────────────────────────
+
+
+@med_router.get(
+    "/search",
+    response_model=MedicineSearchResponse,
+    summary="Fuzzy-search the medicines database for autocomplete",
+)
+def search_medicines(
+    q: str = Query(..., min_length=2, description="Partial medicine name"),
+    specialty: str | None = Query(None),
+    limit: int = Query(7, ge=1, le=20),
+) -> MedicineSearchResponse:
+    """
+    Return up to `limit` medicine name candidates matching the query.
+    Used by the frontend autocomplete dropdown in the Rx Editor.
+    """
+    try:
+        indexer.load_index()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    hits = fuzzy_matcher.find_top_k(
+        query=q,
+        k=limit,
+        specialty=specialty,
+    )
+
+    results = [
+        MedicineSearchResult(
+            name=name,
+            score=score,
+            price=row.get("price"),
+            manufacturer=row.get("manufacturer"),
+        )
+        for name, score, row in hits
+    ]
+
+    return MedicineSearchResponse(query=q, results=results)

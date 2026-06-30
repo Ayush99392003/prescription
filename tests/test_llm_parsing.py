@@ -21,6 +21,7 @@ _VALID_JSON = {
         "gender": "F",
         "id": None,
     },
+    "complaints": ["Headache", "Fever"],
     "diagnosis": "Viral Fever",
     "medications": [
         {
@@ -31,6 +32,7 @@ _VALID_JSON = {
             "instructions": "After meals",
         }
     ],
+    "investigations": ["Dengue NS1 Antigen"],
     "notes": "Drink plenty of fluids.",
 }
 
@@ -112,8 +114,10 @@ class TestOllamaParseResponse:
 
         schema = _parse_llm_response(_VALID_JSON_STR)
         assert schema.patient.name == "Priya Sharma"
+        assert schema.complaints == ["Headache", "Fever"]
         assert len(schema.medications) == 1
         assert schema.medications[0].name == "Paracetamol"
+        assert schema.investigations == ["Dengue NS1 Antigen"]
 
     def test_json_with_preamble_parses(self):
         """Preamble text before the JSON must not prevent parsing."""
@@ -168,7 +172,7 @@ class TestGroqParseResponse:
         from server.llm.groq_provider import _parse_llm_response
 
         with pytest.raises(RuntimeError, match="invalid JSON"):
-            _parse_llm_response("{broken")
+            _parse_llm_response("{ \"broken\": oops }")
 
     def test_schema_mismatch_raises_runtime_error(self):
         from server.llm.groq_provider import _parse_llm_response
@@ -232,6 +236,8 @@ class TestGroqProviderIntegration:
             "User transcript must be passed as 'input='"
         )
         assert schema.patient.name == "Priya Sharma"
+        assert schema.complaints == ["Headache", "Fever"]
+        assert schema.investigations == ["Dengue NS1 Antigen"]
 
     def test_parse_prescription_uses_configured_model(self, mocker):
         """The model name from config.GROQ_MODEL must be forwarded."""

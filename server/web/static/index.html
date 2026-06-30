@@ -4,303 +4,471 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PRESCRIPTION — AI Medical Assistant</title>
-  <meta name="description" content="AI-powered voice prescription assistant for healthcare providers. Record voice, parse medications, and export professional PDFs." />
+  <meta name="description"
+    content="AI-powered voice prescription assistant for healthcare
+    providers. Record voice, parse medications, and export PDFs." />
+  <meta name="theme-color" content="#060c18" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-  <!-- ── Header ────────────────────────────────────────────────────── -->
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
   <header class="header" role="banner">
     <div class="header-inner">
       <div class="logo">
-        <span class="logo-icon">⚕</span>
+        <svg class="logo-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
         <span class="logo-text">PRESCRIPTION</span>
         <span class="logo-badge">AI</span>
       </div>
-      <nav class="tab-nav" role="tablist" aria-label="Pipeline stages">
-        <button class="tab-btn active" data-tab="record" role="tab" aria-selected="true" id="tab-record">
-          <span class="tab-icon">🎙</span> Record
-        </button>
-        <button class="tab-btn" data-tab="pipeline" role="tab" aria-selected="false" id="tab-pipeline">
-          <span class="tab-icon">⚙</span> Pipeline
-        </button>
-        <button class="tab-btn" data-tab="prescription" role="tab" aria-selected="false" id="tab-prescription">
-          <span class="tab-icon">💊</span> Prescription
-        </button>
-        <button class="tab-btn" data-tab="export" role="tab" aria-selected="false" id="tab-export">
-          <span class="tab-icon">📄</span> Export
-        </button>
-      </nav>
-      <div class="session-badge" id="session-badge" aria-live="polite">No session</div>
+      <div class="header-right">
+        <nav class="step-dots" id="step-dots" aria-label="Progress">
+          <span class="dot active" data-step="1">
+            <span class="dot-label">Capture</span>
+          </span>
+          <span class="dot" data-step="2">
+            <span class="dot-label">Processing</span>
+          </span>
+          <span class="dot" data-step="3">
+            <span class="dot-label">Review</span>
+          </span>
+          <span class="dot" data-step="4">
+            <span class="dot-label">Export</span>
+          </span>
+        </nav>
+        <div class="session-badge" id="session-badge"
+          aria-live="polite">No session</div>
+      </div>
     </div>
   </header>
 
-  <!-- ── Main Content ───────────────────────────────────────────────── -->
   <main class="main" role="main">
 
-    <!-- Tab: Record -->
-    <section class="tab-panel active" id="panel-record" role="tabpanel" aria-labelledby="tab-record">
-      <div class="panel-hero">
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 1 — Voice Capture                                   -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <section class="screen active" id="screen-1"
+      aria-label="Voice Capture">
+
+      <div class="screen-hero">
         <h1 class="hero-title">Voice Prescription Assistant</h1>
-        <p class="hero-subtitle">Record a doctor-patient session and generate a validated medical prescription in seconds.</p>
+        <p class="hero-sub">Record the consultation and let AI do the
+          rest — from speech to a validated, signed prescription.</p>
       </div>
 
-      <div class="card-grid">
-        <!-- Record Card -->
-        <div class="card glass" id="card-recorder">
-          <div class="card-header">
-            <h2 class="card-title">🎙 Voice Capture</h2>
-          </div>
-          <div class="recorder-area">
-            <div class="record-btn-wrap">
-              <button class="record-btn" id="btn-record" aria-label="Start recording">
-                <span class="record-pulse"></span>
-                <span class="record-icon">●</span>
-              </button>
-              <p class="record-hint" id="record-hint">Click to start recording</p>
-            </div>
-            <div class="timer-display" id="timer-display" aria-live="polite">00:00</div>
+      <!-- Doctor credentials -->
+      <div class="section-chip">🧑‍⚕️ Doctor Info</div>
+      <div class="creds-row glass card" id="card-creds">
+        <div class="cred-field">
+          <label class="cred-label" for="inp-doctor-name">
+            Doctor Name
+          </label>
+          <input class="cred-input" id="inp-doctor-name" type="text"
+            placeholder="Dr. Ayush Sharma" autocomplete="name" />
+        </div>
+        <div class="cred-field">
+          <label class="cred-label" for="sel-specialty">
+            Specialty
+          </label>
+          <select class="cred-select" id="sel-specialty">
+            <option value="general">General Medicine</option>
+            <option value="pediatrics">Pediatrics</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="dermatology">Dermatology</option>
+            <option value="orthopedics">Orthopedics</option>
+            <option value="neurology">Neurology</option>
+            <option value="gynecology">Gynecology</option>
+            <option value="ent">ENT</option>
+            <option value="ophthalmology">Ophthalmology</option>
+            <option value="psychiatry">Psychiatry</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Voice recorder -->
+      <div class="section-chip">🎙️ Clinical Dictation</div>
+      <div class="glass card record-card" id="card-recorder">
+        <div class="recorder-area">
+          <button class="record-btn" id="btn-record"
+            aria-label="Start recording">
+            <span class="record-pulse"></span>
+            <svg class="record-icon" aria-hidden="true" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+          </button>
+
+          <p class="record-hint" id="record-hint">
+            Click to start recording
+          </p>
+
+          <div class="timer-display" id="timer-display"
+            aria-live="polite" aria-label="Recording duration">
+            00:00
           </div>
 
-          <div class="waveform-wrap">
-            <canvas class="waveform" id="waveform" width="500" height="60" aria-hidden="true"></canvas>
-          </div>
-
-          <div class="audio-actions" id="audio-actions" style="display:none">
-            <audio class="audio-player" id="audio-player" controls aria-label="Recorded audio"></audio>
-            <button class="btn btn-primary" id="btn-run-pipeline" aria-label="Run full pipeline">
-              ⚡ Run Full Pipeline
-            </button>
+          <div class="kbd-hint" id="kbd-hint">
+            <span class="kbd">Space</span> to toggle recording
           </div>
         </div>
 
-        <!-- Config Card -->
-        <div class="card glass" id="card-config">
-          <div class="card-header">
-            <h2 class="card-title">⚙ Configuration</h2>
-          </div>
-          <div class="config-grid">
-            <div class="config-item">
-              <span class="config-label">STT Engine</span>
-              <span class="config-value" id="cfg-stt">faster-whisper</span>
-            </div>
-            <div class="config-item">
-              <span class="config-label">LLM Engine</span>
-              <span class="config-value" id="cfg-llm">Groq</span>
-            </div>
-            <div class="config-item">
-              <span class="config-label">Med Database</span>
-              <span class="config-value">30,000+ Entries</span>
-            </div>
-            <div class="config-item">
-              <span class="config-label">Fuzzy Threshold</span>
-              <span class="config-value">75 / 100</span>
-            </div>
-          </div>
+        <div class="waveform-wrap">
+          <canvas class="waveform" id="waveform" width="600"
+            height="60" aria-hidden="true"></canvas>
+        </div>
+
+        <!-- Audio review + pipeline trigger -->
+        <div class="audio-actions" id="audio-actions"
+          style="display:none">
+          <audio class="audio-player" id="audio-player" controls
+            aria-label="Recorded audio playback"></audio>
+          <button class="btn btn-primary btn-lg" id="btn-run-pipeline"
+            aria-label="Run full AI pipeline">
+            ⚡ Analyse Consultation
+          </button>
+        </div>
+
+        <!-- File upload fallback -->
+        <div class="upload-alt" id="upload-alt">
+          <span class="upload-alt-divider">— or —</span>
+          <label class="upload-file-btn" for="inp-file-upload"
+            tabindex="0" role="button"
+            aria-label="Upload a pre-recorded audio file">
+            📂 Upload audio file
+          </label>
+          <input type="file" id="inp-file-upload"
+            accept="audio/*,.wav,.mp3,.webm,.m4a,.ogg"
+            aria-label="Audio file input" />
         </div>
       </div>
+
     </section>
 
-    <!-- Tab: Pipeline -->
-    <section class="tab-panel" id="panel-pipeline" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
-      <div class="panel-hero">
-        <h1 class="hero-title">Pipeline Progress</h1>
-        <p class="hero-subtitle">Watch each stage process in real time.</p>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 2 — Processing                                      -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <section class="screen" id="screen-2" aria-label="Processing"
+      hidden>
+
+      <div class="screen-hero">
+        <h1 class="hero-title">Processing Consultation</h1>
+        <p class="hero-sub">Transcribing speech and extracting
+          prescription data with AI…</p>
       </div>
 
-      <div class="pipeline-track">
-        <div class="stage-card" id="stage-upload" data-stage="upload">
-          <div class="stage-icon">📤</div>
-          <div class="stage-body">
-            <div class="stage-name">Upload Audio</div>
-            <div class="stage-detail" id="detail-upload">Waiting...</div>
+      <!-- Pipeline stages -->
+      <div class="pipeline-track glass card" id="pipeline-track"
+        style="padding: 20px;">
+        <div class="stage-card" id="stage-upload">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
           </div>
-          <div class="stage-status idle" id="status-upload" aria-live="polite">●</div>
+          <div class="stage-body">
+            <div class="stage-name">Audio Upload</div>
+            <div class="stage-detail" id="detail-upload">
+              Waiting…</div>
+            <div class="stage-elapsed" id="elapsed-upload"></div>
+          </div>
+          <div class="stage-status idle" id="status-upload"
+            aria-live="polite">●</div>
         </div>
 
-        <div class="stage-connector"></div>
+        <div class="stage-connector" aria-hidden="true"></div>
 
-        <div class="stage-card" id="stage-transcribe" data-stage="transcribe">
-          <div class="stage-icon">✍</div>
+        <div class="stage-card" id="stage-transcribe">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
           <div class="stage-body">
             <div class="stage-name">Transcribe</div>
-            <div class="stage-detail" id="detail-transcribe">Waiting...</div>
+            <div class="stage-detail" id="detail-transcribe">
+              Waiting…</div>
+            <div class="stage-elapsed" id="elapsed-transcribe"></div>
           </div>
-          <div class="stage-status idle" id="status-transcribe" aria-live="polite">●</div>
+          <div class="stage-status idle" id="status-transcribe"
+            aria-live="polite">●</div>
         </div>
 
-        <div class="stage-connector"></div>
+        <div class="stage-connector" aria-hidden="true"></div>
 
-        <div class="stage-card" id="stage-parse" data-stage="parse">
-          <div class="stage-icon">🧠</div>
-          <div class="stage-body">
-            <div class="stage-name">LLM Parse</div>
-            <div class="stage-detail" id="detail-parse">Waiting...</div>
+        <div class="stage-card" id="stage-parse">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>
+            </svg>
           </div>
-          <div class="stage-status idle" id="status-parse" aria-live="polite">●</div>
+          <div class="stage-body">
+            <div class="stage-name">AI Extract</div>
+            <div class="stage-detail" id="detail-parse">
+              Waiting…</div>
+            <div class="stage-elapsed" id="elapsed-parse"></div>
+          </div>
+          <div class="stage-status idle" id="status-parse"
+            aria-live="polite">●</div>
         </div>
 
-        <div class="stage-connector"></div>
+        <div class="stage-connector" aria-hidden="true"></div>
 
-        <div class="stage-card" id="stage-validate" data-stage="validate">
-          <div class="stage-icon">🔍</div>
-          <div class="stage-body">
-            <div class="stage-name">Validate Meds</div>
-            <div class="stage-detail" id="detail-validate">Waiting...</div>
+        <div class="stage-card" id="stage-validate">
+          <div class="stage-icon">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+            </svg>
           </div>
-          <div class="stage-status idle" id="status-validate" aria-live="polite">●</div>
-        </div>
-
-        <div class="stage-connector"></div>
-
-        <div class="stage-card" id="stage-export" data-stage="export">
-          <div class="stage-icon">📄</div>
           <div class="stage-body">
-            <div class="stage-name">Export PDF</div>
-            <div class="stage-detail" id="detail-export">Waiting...</div>
+            <div class="stage-name">Safety Check</div>
+            <div class="stage-detail" id="detail-validate">
+              Waiting…</div>
+            <div class="stage-elapsed" id="elapsed-validate"></div>
           </div>
-          <div class="stage-status idle" id="status-export" aria-live="polite">●</div>
+          <div class="stage-status idle" id="status-validate"
+            aria-live="polite">●</div>
         </div>
       </div>
 
-      <div class="transcript-panel glass" id="transcript-panel" style="display:none">
-        <h3>📝 Transcript</h3>
+      <!-- Transcript display -->
+      <div class="transcript-panel glass" id="transcript-panel"
+        style="display:none">
+        <h3>📝 Live Transcript</h3>
         <p id="transcript-text" class="transcript-text"></p>
       </div>
+
+      <!-- Retry on error -->
+      <div class="retry-row" id="retry-row" style="display:none">
+        <button class="btn-retry" id="btn-retry"
+          aria-label="Retry failed step">
+          ↺ Retry
+        </button>
+      </div>
+
     </section>
 
-    <!-- Tab: Prescription -->
-    <section class="tab-panel" id="panel-prescription" role="tabpanel" aria-labelledby="tab-prescription" hidden>
-      <div class="panel-hero">
-        <h1 class="hero-title">Prescription Review</h1>
-        <p class="hero-subtitle">Verify extracted data before exporting.</p>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 3 — Interactive Rx Editor                           -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <section class="screen" id="screen-3" aria-label="Rx Editor"
+      hidden>
+
+      <div class="screen-hero">
+        <h1 class="hero-title">Review &amp; Edit Prescription</h1>
+        <p class="hero-sub">All fields are editable. Verify AI output
+          before approving.</p>
       </div>
 
-      <div id="rx-empty-state" class="empty-state">
-        <span class="empty-icon">💊</span>
-        <p>No prescription data yet. Record and run the pipeline first.</p>
-      </div>
-
-      <div id="rx-content" style="display:none">
-        <!-- Patient Card -->
-        <div class="card glass patient-card">
-          <div class="card-header">
-            <h2 class="card-title">👤 Patient Information</h2>
-            <span class="diagnosis-badge" id="rx-diagnosis"></span>
-          </div>
-          <div class="patient-grid">
-            <div class="patient-field">
-              <span class="field-label">Name</span>
-              <span class="field-value" id="rx-name">—</span>
-            </div>
-            <div class="patient-field">
-              <span class="field-label">Age</span>
-              <span class="field-value" id="rx-age">—</span>
-            </div>
-            <div class="patient-field">
-              <span class="field-label">Gender</span>
-              <span class="field-value" id="rx-gender">—</span>
-            </div>
-            <div class="patient-field">
-              <span class="field-label">Patient ID</span>
-              <span class="field-value" id="rx-pid">—</span>
-            </div>
-          </div>
+      <!-- Patient information -->
+      <div class="glass card rx-section" id="rx-patient-card">
+        <div class="rx-section-header">
+          <h2 class="rx-section-title">🤒 Patient Information</h2>
         </div>
-
-        <!-- Medications Table -->
-        <div class="card glass">
-          <div class="card-header">
-            <h2 class="card-title">💊 Medications</h2>
-            <span class="med-count-badge" id="med-count-badge">0 medications</span>
+        <div class="patient-grid">
+          <div class="rx-field">
+            <label class="rx-label" for="rx-name">Full Name</label>
+            <input class="rx-input" id="rx-name" type="text"
+              placeholder="Patient name"
+              autocomplete="off" />
           </div>
-          <div class="table-wrap">
-            <table class="med-table" id="med-table" aria-label="Medications">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Medicine</th>
-                  <th>Match Score</th>
-                  <th>Dosage</th>
-                  <th>Frequency</th>
-                  <th>Duration</th>
-                  <th>Instructions</th>
-                  <th>Price</th>
-                  <th>Manufacturer</th>
-                </tr>
-              </thead>
-              <tbody id="med-tbody"></tbody>
-            </table>
+          <div class="rx-field">
+            <label class="rx-label" for="rx-age">Age</label>
+            <input class="rx-input" id="rx-age" type="text"
+              placeholder="e.g. 45" inputmode="numeric" />
           </div>
-        </div>
-
-        <!-- Notes Card -->
-        <div class="card glass notes-card" id="notes-card" style="display:none">
-          <div class="card-header"><h2 class="card-title">📋 Notes</h2></div>
-          <p id="rx-notes" class="notes-text"></p>
+          <div class="rx-field">
+            <label class="rx-label" for="rx-gender">Gender</label>
+            <select class="rx-input" id="rx-gender">
+              <option value="">— Select —</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="rx-field">
+            <label class="rx-label" for="rx-pid">Patient ID</label>
+            <input class="rx-input" id="rx-pid" type="text"
+              placeholder="MRN / ID" autocomplete="off" />
+          </div>
         </div>
       </div>
+
+      <!-- Clinical info -->
+      <div class="glass card rx-section clinical-grid-2col">
+        <div class="rx-field">
+          <label class="rx-label" for="rx-diagnosis">
+            🩺 Diagnosis
+          </label>
+          <input class="rx-input" id="rx-diagnosis" type="text"
+            placeholder="Primary diagnosis" />
+        </div>
+        <div class="rx-field">
+          <label class="rx-label" for="rx-complaints">
+            Complaints
+          </label>
+          <textarea class="rx-input rx-textarea" id="rx-complaints"
+            rows="2"
+            placeholder="Chief complaints, one per line"></textarea>
+        </div>
+        <div class="rx-field">
+          <label class="rx-label" for="rx-investigations">
+            🔬 Investigations
+          </label>
+          <textarea class="rx-input rx-textarea"
+            id="rx-investigations" rows="2"
+            placeholder="Tests ordered, one per line"></textarea>
+        </div>
+        <div class="rx-field">
+          <label class="rx-label" for="rx-notes">📋 Notes</label>
+          <textarea class="rx-input rx-textarea" id="rx-notes"
+            rows="2"
+            placeholder="Additional advice / lifestyle changes">
+          </textarea>
+        </div>
+      </div>
+
+      <!-- Medications table -->
+      <div class="glass card rx-section">
+        <div class="rx-section-header">
+          <h2 class="rx-section-title">💊 Medications</h2>
+          <button class="btn btn-ghost btn-sm" id="btn-add-med"
+            aria-label="Add medication row">
+            + Add Row
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table class="med-table" id="med-table"
+            aria-label="Medications editor">
+            <thead>
+              <tr>
+                <th style="width:28px"></th>
+                <th>#</th>
+                <th>Medicine Name</th>
+                <th>Match</th>
+                <th>Dosage</th>
+                <th>Frequency</th>
+                <th>Duration</th>
+                <th>Instructions</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="med-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sticky approve bar -->
+      <div class="approve-bar" id="approve-bar">
+        <div class="approve-bar-info" id="approve-bar-info">
+          Review complete &mdash; approve to generate PDF
+        </div>
+        <div class="approve-bar-actions">
+          <button class="btn btn-outline btn-sm" id="btn-back-to-rec"
+            aria-label="Go back to recording">
+            ← Re-record
+          </button>
+          <button class="btn btn-primary btn-lg" id="btn-approve"
+            aria-label="Approve and generate PDF">
+            ✅ Approve &amp; Generate PDF
+          </button>
+        </div>
+      </div>
+
     </section>
 
-    <!-- Tab: Export -->
-    <section class="tab-panel" id="panel-export" role="tabpanel" aria-labelledby="tab-export" hidden>
-      <div class="panel-hero">
-        <h1 class="hero-title">Export Prescription</h1>
-        <p class="hero-subtitle">Generate and download the professional A4 PDF prescription.</p>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 4 — Export                                          -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <section class="screen" id="screen-4" aria-label="Export" hidden>
+
+      <div class="export-success">
+        <div class="success-ring" aria-hidden="true">
+          <span class="success-check">✓</span>
+        </div>
+        <h1 class="hero-title">Prescription Approved!</h1>
+        <p class="hero-sub">Your PDF is ready — review below and
+          download or print.</p>
       </div>
 
-      <div class="export-grid">
-        <div class="card glass export-card">
-          <div class="export-icon-wrap">
-            <span class="export-icon-large">📄</span>
-          </div>
-          <h2 class="export-title">PDF Prescription</h2>
-          <p class="export-desc">
-            A professionally formatted A4 prescription with clinic branding,
-            patient information, validated medication table, and doctor's
-            signature line.
-          </p>
-          <div class="export-actions">
-            <button class="btn btn-primary btn-lg" id="btn-export-pdf" disabled>
-              Generate PDF
+      <!-- Inline PDF preview -->
+      <div class="pdf-preview-wrap glass" id="pdf-preview-wrap"
+        style="display:none">
+        <div class="pdf-preview-header">
+          <span class="pdf-preview-title">📄 Prescription Preview
+          </span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-ghost btn-sm" id="btn-print"
+              aria-label="Print prescription">
+              🖨 Print
             </button>
-            <a class="btn btn-ghost btn-lg" id="btn-download-pdf" style="display:none" aria-label="Download PDF">
-              ⬇ Download PDF
-            </a>
           </div>
-          <div class="export-status" id="export-status"></div>
         </div>
+        <iframe class="pdf-preview-frame" id="pdf-iframe"
+          title="Prescription PDF preview"></iframe>
+      </div>
 
-        <div class="card glass session-summary-card">
-          <div class="card-header"><h2 class="card-title">📊 Session Summary</h2></div>
-          <div class="summary-grid">
-            <div class="summary-item">
-              <span class="summary-label">Session ID</span>
-              <span class="summary-value mono" id="sum-sid">—</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Status</span>
-              <span class="summary-value" id="sum-status">No session</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Medications</span>
-              <span class="summary-value" id="sum-meds">—</span>
-            </div>
-            <div class="summary-item">
-              <span class="summary-label">Elapsed</span>
-              <span class="summary-value" id="sum-elapsed">—</span>
-            </div>
+      <!-- Download + actions -->
+      <div class="export-actions-row">
+        <a class="btn btn-primary btn-lg" id="btn-download-pdf"
+          aria-label="Download PDF prescription">
+          ⬇ Download PDF
+        </a>
+        <button class="btn btn-outline btn-lg" id="btn-back-to-edit"
+          aria-label="Go back and edit prescription">
+          ✏ Back to Edit
+        </button>
+      </div>
+
+      <!-- Session summary -->
+      <div class="glass card summary-card">
+        <div class="rx-section-header">
+          <h2 class="rx-section-title">📊 Session Summary</h2>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span class="summary-label">Session ID</span>
+            <span class="summary-value mono" id="sum-sid">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Patient</span>
+            <span class="summary-value" id="sum-patient">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Medications</span>
+            <span class="summary-value" id="sum-meds">—</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Elapsed</span>
+            <span class="summary-value" id="sum-elapsed">—</span>
           </div>
         </div>
       </div>
+
+      <div class="new-session-row">
+        <button class="btn btn-ghost btn-lg" id="btn-new-session"
+          aria-label="Start a new session">
+          ↺ New Session
+        </button>
+      </div>
+
     </section>
 
   </main>
 
-  <!-- ── Toast Notification ─────────────────────────────────────────── -->
-  <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+  <!-- ── Toast ────────────────────────────────────────────────────── -->
+  <div class="toast" id="toast" role="alert" aria-live="assertive">
+    <span class="toast-icon" id="toast-icon"></span>
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- ── Medicine autocomplete dropdown ───────────────────────────── -->
+  <div class="autocomplete-dropdown" id="ac-dropdown" hidden>
+    <ul class="ac-list" id="ac-list" role="listbox"></ul>
+  </div>
 
   <script src="/js/app.js"></script>
 </body>

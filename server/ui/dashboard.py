@@ -78,7 +78,7 @@ def print_transcript(transcript: str) -> None:
     """Display the STT transcript in a styled panel."""
     console.print(Panel(
         f"[italic]{transcript}[/italic]",
-        title="[bold cyan]📝 Transcript[/bold cyan]",
+        title="[bold cyan]Transcript[/bold cyan]",
         border_style="cyan",
         padding=(0, 2),
     ))
@@ -109,16 +109,25 @@ def print_prescription_table(
         f"[bold]Patient ID:[/bold]{pat.id or 'N/A'}\n"
         f"[bold]Diagnosis:[/bold] {rx.diagnosis}"
     )
+    if rx.complaints:
+        complaints_str = ", ".join(rx.complaints)
+        info_text += f"\n[bold]Complaints:[/bold] {complaints_str}"
+    if rx.investigations:
+        investigations_str = ", ".join(rx.investigations)
+        info_text += f"\n[bold]Investigations:[/bold] {investigations_str}"
+
     console.print(Panel(
         info_text,
-        title="[bold blue]👤 Patient[/bold blue]",
+        title="[bold blue]Patient[/bold blue]",
         border_style="blue",
     ))
     console.print()
 
     # ── Medications table ────────────────────────────────────────
+    from server.core.session import translate_frequency
+
     table = Table(
-        title="💊 Prescribed Medications",
+        title="Prescribed Medications",
         show_header=True,
         header_style="bold white on blue",
         border_style="blue",
@@ -131,8 +140,6 @@ def print_prescription_table(
     table.add_column("Dosage")
     table.add_column("Frequency")
     table.add_column("Duration")
-    table.add_column("Price", style="yellow")
-    table.add_column("Manufacturer", style="dim")
 
     for i, med in enumerate(session.validated_meds, 1):
         score_str = (
@@ -142,13 +149,11 @@ def print_prescription_table(
         )
         table.add_row(
             str(i),
-            med.matched_name or f"[red]⚠ {med.name}[/red]",
+            med.matched_name or f"[red]{med.name}[/red]",
             score_str,
             med.dosage,
-            med.frequency,
+            translate_frequency(med.frequency),
             med.duration,
-            med.price or "N/A",
-            (med.manufacturer or "N/A")[:22],
         )
 
     console.print(table)
@@ -156,7 +161,7 @@ def print_prescription_table(
     if rx.notes:
         console.print(Panel(
             f"[italic]{rx.notes}[/italic]",
-            title="[bold]📋 Notes[/bold]",
+            title="[bold]Notes[/bold]",
             border_style="yellow",
         ))
     console.print()
@@ -165,9 +170,9 @@ def print_prescription_table(
 def print_session_summary(session: "PrescriptionSession") -> None:
     """Print a final timing and status summary panel."""
     status = (
-        "[bold green]✓ Complete[/bold green]"
+        "[bold green]Complete[/bold green]"
         if session.is_complete()
-        else "[bold yellow]⚠ No PDF[/bold yellow]"
+        else "[bold yellow]No PDF[/bold yellow]"
     )
     summary = (
         f"Session ID  : {session.session_id}\n"
@@ -187,7 +192,7 @@ def print_error(title: str, message: str) -> None:
     """Display a formatted error panel."""
     console.print(Panel(
         f"[bold red]{message}[/bold red]",
-        title=f"[bold red]❌ {title}[/bold red]",
+        title=f"[bold red]{title}[/bold red]",
         border_style="red",
     ))
     console.print()
@@ -197,6 +202,6 @@ def print_step(step: str, detail: str = "") -> None:
     """Print a pipeline step divider."""
     console.print(Rule(
         f"[bold cyan]{step}[/bold cyan]"
-        + (f" [dim]— {detail}[/dim]" if detail else ""),
+        + (f" [dim]- {detail}[/dim]" if detail else ""),
         style="blue",
     ))

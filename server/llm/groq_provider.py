@@ -38,6 +38,7 @@ JSON schema:
     "gender": "string or null",
     "id": "string or null"
   },
+  "complaints": ["string"],
   "diagnosis": "string",
   "medications": [
     {
@@ -48,12 +49,17 @@ JSON schema:
       "instructions": "string"
     }
   ],
+  "investigations": ["string"],
   "notes": "string"
 }
 
 Rules:
 - Output ONLY the raw JSON object.
 - Use "Not specified" for missing string values.
+- Extract symptoms / chief complaints into the complaints list. Include the
+  full symptom description along with any specified durations, severity,
+  or remarks (e.g., "vomiting for 4 days") instead of single keywords.
+- Extract ordered tests/scans/diagnostics into the investigations list.
 - Extract every drug mentioned into the medications list.
 - Use exact brand/generic names as spoken.
 """
@@ -126,14 +132,52 @@ class GroqProvider(LLMProvider):
         return _parse_llm_response(raw)
 
 
+def _extract_json_block(content: str) -> str:
+    """
+    Extract the first balanced JSON object from an LLM response.
+    """
+    start = content.find("{")
+    if start == -1:
+        raise RuntimeError(
+            "LLM output contains no JSON object (no '{' found).\n"
+            f"Raw output:\n{content[:300]}"
+        )
+
+    depth = 0
+    in_string = False
+    escape_next = False
+
+    for idx in range(start, len(content)):
+        ch = content[idx]
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return content[start: idx + 1]
+
+    raise RuntimeError(
+        "LLM output has unbalanced braces — cannot extract JSON.\n"
+        f"Raw output:\n{content[:300]}"
+    )
+
+
 def _parse_llm_response(content: str) -> PrescriptionSchema:
     """
     Validate a raw JSON string against the PrescriptionSchema.
 
-    Groq's Responses API returns clean JSON when the system prompt
-    instructs it to, so a direct ``json.loads`` is used here.  The
-    brace-depth extractor from the Ollama provider is intentionally
-    not reused because Groq responses are structurally cleaner.
+    Extracts balanced JSON first to handle markdown fences or preamble.
 
     Args:
         content: Raw LLM output string.
@@ -144,8 +188,9 @@ def _parse_llm_response(content: str) -> PrescriptionSchema:
     Raises:
         RuntimeError: On JSON parse or schema validation failure.
     """
+    raw_json = _extract_json_block(content)
     try:
-        data: dict[str, Any] = json.loads(content.strip())
+        data: dict[str, Any] = json.loads(raw_json)
     except json.JSONDecodeError as exc:
         raise RuntimeError(
             f"Groq returned invalid JSON: {exc}\n"

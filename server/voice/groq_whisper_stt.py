@@ -66,7 +66,7 @@ class GroqWhisperSTT(STTProvider):
                 ) from exc
 
         transcript = _clean_fillers(transcript)
-        console.print("[green]✓ Transcribed via Groq API[/green]")
+        console.print("[green]Transcribed via Groq API[/green]")
         return transcript
 
 

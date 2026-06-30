@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from server.web.routes.session import router as session_router
+from server.web.routes.session import med_router, router as session_router
 
 _STATIC_DIR = Path(__file__).parent / "static"
 
@@ -46,6 +46,14 @@ def create_app() -> FastAPI:
 
     # REST routes
     app.include_router(session_router)
+    app.include_router(med_router)
+
+    # Catch-all WebSocket route to prevent Starlette StaticFiles from crashing
+    # on stray websocket requests (e.g. from browser extensions or dev tools)
+    from fastapi import WebSocket
+    @app.websocket("/{path:path}")
+    async def websocket_catch_all(websocket: WebSocket, path: str):
+        await websocket.close()
 
     # Serve the SPA from /
     if _STATIC_DIR.exists():

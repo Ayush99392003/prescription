@@ -56,12 +56,20 @@ class PrescriptionSchema(BaseModel):
     patient: PatientInfo = Field(
         default_factory=PatientInfo
     )
+    complaints: list[str] = Field(
+        default_factory=list,
+        description="Chief complaints or symptoms reported by the patient",
+    )
     diagnosis: str = Field(
         default="Not specified",
-        description="Primary diagnosis or chief complaint",
+        description="Primary diagnosis",
     )
     medications: list[Medication] = Field(
         default_factory=list
+    )
+    investigations: list[str] = Field(
+        default_factory=list,
+        description="Diagnostic tests, lab investigations, or scans ordered",
     )
     notes: str = Field(
         default="",
